@@ -758,27 +758,130 @@ class V27Engine:
 
 
 # ================================================================
-# V27 OPTIMIZER FUNCTION
+# V27 ENGINE - YOUR IDEA IMPLEMENTATION
 # ================================================================
-def v27_optimizer(demand: dict, capacity: int, max_plates: int, iterations: int = 50) -> list:
-    """V27 Engine - 1 Round Optimization"""
+
+def v27_optimizer(demand: dict, capacity: int, max_plates: int) -> list:
+    """
+    V27 Engine - Based on Your Idea
     
-    # Validate
-    validator = V27Engine.InputValidator()
-    is_valid, message = validator.validate(demand, capacity, max_plates)
+    Rules:
+    1. UPS (capacity) কখনো পরিবর্তন হবে না
+    2. Plate সংখ্যা User-এর Max Plates-এর বেশি হবে না
+    3. অনেক Candidate Sheet Test করবে
+    4. Manual Trial-এর বদলে Computer Search করবে
+    """
     
-    if not is_valid:
-        st.warning(f"Validation Error: {message}")
-        return []
+    total_qty = sum(demand.values())
+    capacity_per_round = max_plates * capacity
     
-    # Search
-    engine = V27Engine.SearchEngine(max_plates, capacity, iterations)
-    solution, details = engine.search(demand)
+    # ================================================================
+    # STEP 1: Estimated Sheet বের করুন
+    # ================================================================
+    estimated_sheets = math.ceil(total_qty / capacity_per_round)
     
-    if not solution:
-        return []
+    # ================================================================
+    # STEP 2: অনেক Candidate Sheet তৈরি করুন
+    # ================================================================
+    candidate_sheets = []
     
-    return ensure_demand_met(solution, demand)
+    # Estimated Sheet এর আশেপাশে 20-30 টা Candidate তৈরি করুন
+    for i in range(-15, 16):  # -15 to +15
+        candidate = estimated_sheets + i
+        if candidate >= 1:  # Sheet 0 বা negative হতে পারে না
+            candidate_sheets.append(candidate)
+    
+    # Unique এবং Sorted করুন
+    candidate_sheets = sorted(set(candidate_sheets))
+    
+    # ================================================================
+    # STEP 3: প্রতিটি Candidate দিয়ে Simulation করুন
+    # ================================================================
+    best_solution = None
+    best_waste = float('inf')
+    best_details = {}
+    
+    for sheets in candidate_sheets:
+        # 3.1: এই Candidate দিয়ে Production Calculate করুন
+        remaining = demand.copy()
+        plates = []
+        plate_count = 0
+        
+        # 3.2: Max Plates পর্যন্ত প্লেট তৈরি করুন
+        while plate_count < max_plates and any(v > 0 for v in remaining.values()):
+            # Layout তৈরি করুন (UPS Fixed = capacity)
+            layout = create_layout(remaining, capacity)
+            
+            if not layout:
+                break
+            
+            # এই প্লেট Apply করুন
+            for tag, ups in layout.items():
+                remaining[tag] = max(0, remaining[tag] - (ups * sheets))
+            
+            plates.append({
+                "name": plate_name(plate_count + 1),
+                "layout": layout,
+                "sheets": sheets
+            })
+            
+            plate_count += 1
+        
+        # 3.3: Final Waste Calculate করুন
+        final_waste = calculate_waste_percent(plates, demand)
+        
+        # 3.4: Best Solution Update করুন
+        if final_waste < best_waste:
+            best_waste = final_waste
+            best_solution = plates
+            best_details = {
+                "sheets_used": sheets,
+                "candidate_index": candidate_sheets.index(sheets),
+                "total_candidates": len(candidate_sheets),
+                "total_plates": len(plates)
+            }
+    
+    # ================================================================
+    # STEP 4: Best Solution Return করুন
+    # ================================================================
+    return ensure_demand_met(best_solution, demand)
+
+
+def create_layout(remaining: dict, capacity: int) -> dict:
+    """
+    Plate Layout তৈরি করুন - UPS কখনো capacity এর বেশি হবে না
+    """
+    active = {k: v for k, v in remaining.items() if v > 0}
+    if not active:
+        return {}
+    
+    total_remaining = sum(active.values())
+    layout = {}
+    used_capacity = 0
+    
+    # ডিমান্ড অনুযায়ী সাজান (বড় থেকে ছোট)
+    sorted_items = sorted(active.items(), key=lambda x: x[1], reverse=True)
+    
+    for tag, qty in sorted_items:
+        if used_capacity >= capacity:
+            break
+        
+        # UPS ক্যালকুলেট করুন (capacity এর বেশি হবে না)
+        ratio = qty / total_remaining if total_remaining > 0 else 0
+        ups = max(1, int(ratio * capacity))
+        ups = min(ups, capacity - used_capacity)
+        
+        if ups > 0:
+            layout[tag] = ups
+            used_capacity += ups
+    
+    # বাকি ক্যাপাসিটি পূরণ করুন
+    while used_capacity < capacity and active:
+        best_tag = max(active, key=lambda t: remaining[t] / (layout.get(t, 1) + 1))
+        layout[best_tag] = layout.get(best_tag, 0) + 1
+        used_capacity += 1
+    
+    return layout
 
 
 # ================================================================
