@@ -509,7 +509,7 @@ def generate_pdf_report(plates: list, demand: dict, original_qty: dict,
         return None
 
 
-√
+
 
 # ================================================================
 # MAIN UI
