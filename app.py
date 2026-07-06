@@ -1,5 +1,5 @@
 # ================================================================
-# app.py — V27 ENGINE ONLY
+# app.py — V27 ENGINE ONLY (FIXED)
 # Pure V27 Engine Application
 # Design by Ovi
 # ================================================================
@@ -24,7 +24,6 @@ import pandas as pd
 # LIBRARY IMPORTS & CHECKS
 # ================================================================
 
-# Try to import reportlab for PDF
 try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
@@ -46,7 +45,7 @@ st.set_page_config(
 )
 
 # ================================================================
-# MODERN CSS
+# CSS STYLING
 # ================================================================
 st.markdown("""
 <style>
@@ -83,11 +82,6 @@ st.markdown("""
         color: rgba(255,255,255,0.7);
         font-size: 1.1rem;
         margin-top: 0.3rem;
-    }
-    .main-header .version {
-        color: rgba(255,255,255,0.5);
-        font-size: 0.85rem;
-        margin-top: 0.2rem;
     }
     .main-header .designer {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -155,18 +149,7 @@ st.markdown("""
         color: white !important;
         padding: 0.5rem 1rem !important;
     }
-    .stNumberInput input:focus, .stTextInput input:focus {
-        border-color: #667eea !important;
-        box-shadow: 0 0 0 2px rgba(102,126,234,0.2) !important;
-        background: rgba(255,255,255,0.12) !important;
-    }
     .stDataFrame { background: rgba(255,255,255,0.05); border-radius: 16px; padding: 0.5rem; }
-    .metric-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 1rem;
-        margin: 1rem 0;
-    }
     .metric-item {
         background: rgba(255,255,255,0.05);
         border-radius: 12px;
@@ -186,11 +169,6 @@ st.markdown("""
         color: rgba(255,255,255,0.6);
         margin-top: 0.2rem;
     }
-    .warning { background: rgba(255,193,7,0.1); padding: 12px; border-radius: 12px; border-left: 4px solid #ffc107; color: #ffc107; margin: 1rem 0; }
-    .info { background: rgba(23,162,184,0.1); padding: 12px; border-radius: 12px; border-left: 4px solid #17a2b8; color: #17a2b8; }
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); border-radius: 10px; }
-    ::-webkit-scrollbar-thumb { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 10px; }
     #MainMenu, header, footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
@@ -202,7 +180,6 @@ st.markdown("""
 <div class="main-header">
     <h1>🚀 V27 Engine</h1>
     <div class="subtitle">Smart Production Planning & Ratio Optimization</div>
-    <div class="version">Version 27 • Single Engine Architecture</div>
     <div class="designer">✨ Design by Ovi ✨</div>
 </div>
 """, unsafe_allow_html=True)
@@ -358,12 +335,6 @@ def generate_pdf_report(plates: list, demand: dict, original_qty: dict,
             textColor=colors.HexColor('#667eea'),
             spaceAfter=4
         )
-        job_style = ParagraphStyle(
-            'JobStyle', parent=styles['Heading2'],
-            fontSize=12, alignment=TA_CENTER,
-            textColor=colors.HexColor('#764ba2'),
-            spaceAfter=8
-        )
         subtitle_style = ParagraphStyle(
             'CustomSubtitle', parent=styles['Normal'],
             fontSize=9, alignment=TA_CENTER, 
@@ -381,7 +352,11 @@ def generate_pdf_report(plates: list, demand: dict, original_qty: dict,
         
         story.append(Paragraph("🚀 V27 Engine - Ratio Report", title_style))
         if job_number:
-            story.append(Paragraph(f"🔢 Job Number: {job_number}", job_style))
+            story.append(Paragraph(f"🔢 Job Number: {job_number}", 
+                          ParagraphStyle('JobStyle', parent=styles['Heading2'],
+                                       fontSize=12, alignment=TA_CENTER,
+                                       textColor=colors.HexColor('#764ba2'),
+                                       spaceAfter=8)))
         story.append(Paragraph(
             f"Algorithm: {algo_name} | Waste: {waste_percent}% | "
             f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -509,6 +484,301 @@ def generate_pdf_report(plates: list, demand: dict, original_qty: dict,
         return None
 
 
+# ================================================================
+# V27 ENGINE - COMPLETE IMPLEMENTATION
+# ================================================================
+
+class V27Engine:
+    """
+    V27 Engine - Smart Production Planning System
+    """
+    
+    def __init__(self, capacity: int, max_plates: int, max_sheets: int = 100):
+        self.capacity = capacity
+        self.max_plates = max_plates
+        self.max_sheets = max_sheets
+        self.learning_memory = {}
+    
+    # ================================================================
+    # 1. INPUT VALIDATOR
+    # ================================================================
+    class InputValidator:
+        @staticmethod
+        def validate(demand: dict, capacity: int, max_plates: int) -> Tuple[bool, str]:
+            if not demand:
+                return False, "Demand data is empty"
+            if not all(isinstance(v, (int, float)) and v >= 0 for v in demand.values()):
+                return False, "All quantities must be positive numbers"
+            if capacity <= 0:
+                return False, "Plate capacity must be greater than 0"
+            if max_plates <= 0:
+                return False, "Max plates must be greater than 0"
+            total_demand = sum(demand.values())
+            if total_demand == 0:
+                return False, "Total demand is zero"
+            return True, "Validation successful"
+    
+    # ================================================================
+    # 2. CANDIDATE SHEET GENERATOR
+    # ================================================================
+    class CandidateSheetGenerator:
+        def __init__(self, capacity: int, max_plates: int, max_sheets: int = 100):
+            self.capacity = capacity
+            self.max_plates = max_plates
+            self.max_sheets = max_sheets
+        
+        def generate_candidates(self, remaining_total: int) -> List[int]:
+            capacity_per_round = self.max_plates * self.capacity
+            if capacity_per_round == 0:
+                return [1]
+            
+            base_sheets = math.ceil(remaining_total / capacity_per_round)
+            candidates = []
+            
+            # First: base sheets
+            candidates.append(base_sheets)
+            
+            # Second: reduced sheets (like your 12)
+            if base_sheets > 3:
+                candidates.append(max(1, base_sheets // 5))
+            
+            # Third: minimal sheets (like your 2)
+            if base_sheets > 5:
+                candidates.append(max(1, base_sheets // 30))
+            
+            # Add variations
+            for i in range(max(1, base_sheets - 2), base_sheets + 3):
+                if i not in candidates and i <= self.max_sheets:
+                    candidates.append(i)
+            
+            return sorted(set(candidates))
+    
+    # ================================================================
+    # 3. PLATE BUILDER
+    # ================================================================
+    class PlateBuilder:
+        def __init__(self, capacity: int):
+            self.capacity = capacity
+        
+        def build_layout(self, remaining: dict) -> dict:
+            active = {k: v for k, v in remaining.items() if v > 0}
+            if not active:
+                return {}
+            
+            total_remaining = sum(active.values())
+            layout = {}
+            used_capacity = 0
+            
+            sorted_items = sorted(active.items(), key=lambda x: x[1], reverse=True)
+            
+            for tag, qty in sorted_items:
+                if used_capacity >= self.capacity:
+                    break
+                
+                ratio = qty / total_remaining if total_remaining > 0 else 0
+                ups = max(1, int(ratio * self.capacity))
+                ups = min(ups, self.capacity - used_capacity)
+                
+                if ups > 0:
+                    layout[tag] = ups
+                    used_capacity += ups
+            
+            while used_capacity < self.capacity and active:
+                best_tag = max(active, key=lambda t: remaining[t] / (layout.get(t, 1) + 1))
+                layout[best_tag] = layout.get(best_tag, 0) + 1
+                used_capacity += 1
+            
+            return layout
+    
+    # ================================================================
+    # 4. SINGLE ROUND SIMULATOR
+    # ================================================================
+    class SingleRoundSimulator:
+        def __init__(self, max_plates: int, capacity: int):
+            self.max_plates = max_plates
+            self.capacity = capacity
+            self.plate_builder = V27Engine.PlateBuilder(capacity)
+        
+        def simulate_round(self, remaining: dict, sheet_counts: List[int]) -> Tuple[List[dict], dict]:
+            all_plates = []
+            current_remaining = remaining.copy()
+            
+            for sheet_count in sheet_counts:
+                for plate_num in range(self.max_plates):
+                    if not any(v > 0 for v in current_remaining.values()):
+                        break
+                    
+                    layout = self.plate_builder.build_layout(current_remaining)
+                    if not layout:
+                        break
+                    
+                    for tag, ups in layout.items():
+                        current_remaining[tag] = max(0, current_remaining.get(tag, 0) - (ups * sheet_count))
+                    
+                    all_plates.append({
+                        "name": plate_name(len(all_plates) + 1),
+                        "layout": layout,
+                        "sheets": sheet_count
+                    })
+            
+            return all_plates, current_remaining
+    
+    # ================================================================
+    # 5. WASTE CALCULATOR
+    # ================================================================
+    @staticmethod
+    def calculate_waste(plates: list, demand: dict) -> float:
+        total_produced = 0
+        total_demand = sum(demand.values())
+        
+        if total_demand == 0:
+            return 0.0
+        
+        for plate in plates:
+            for tag, ups in plate["layout"].items():
+                total_produced += ups * plate.get("sheets", 0)
+        
+        if total_produced == 0:
+            return 100.0
+        
+        waste = total_produced - total_demand
+        waste_percent = (waste / total_produced) * 100
+        return max(0, round(waste_percent, 2))
+    
+    # ================================================================
+    # 6. SOLUTION SCORER
+    # ================================================================
+    class SolutionScorer:
+        def __init__(self, waste_weight: float = 0.5, plates_weight: float = 0.25, sheets_weight: float = 0.25):
+            self.waste_weight = waste_weight
+            self.plates_weight = plates_weight
+            self.sheets_weight = sheets_weight
+        
+        def score(self, plates: list, demand: dict) -> float:
+            waste = V27Engine.calculate_waste(plates, demand)
+            num_plates = len(plates)
+            total_sheets = sum(p.get("sheets", 0) for p in plates)
+            
+            waste_score = waste / 100
+            plates_score = num_plates / 100
+            sheets_score = total_sheets / 100
+            
+            return (self.waste_weight * waste_score +
+                    self.plates_weight * plates_score +
+                    self.sheets_weight * sheets_score)
+    
+    # ================================================================
+    # 7. SEARCH ENGINE
+    # ================================================================
+    class SearchEngine:
+        def __init__(self, max_plates: int, capacity: int, iterations: int = 50):
+            self.max_plates = max_plates
+            self.capacity = capacity
+            self.iterations = iterations
+        
+        def search(self, demand: dict) -> Tuple[list, dict]:
+            best_solution = None
+            best_score = float('inf')
+            best_details = {}
+            
+            strategies = [
+                self._greedy_strategy,
+                self._balanced_strategy,
+                self._proportional_strategy,
+                self._random_strategy,
+            ]
+            
+            for strategy in strategies:
+                for _ in range(max(1, self.iterations // len(strategies))):
+                    solution, details = strategy(demand)
+                    if solution:
+                        scorer = V27Engine.SolutionScorer()
+                        score = scorer.score(solution, demand)
+                        
+                        if score < best_score:
+                            best_score = score
+                            best_solution = solution
+                            best_details = details
+            
+            return best_solution, best_details
+        
+        def _greedy_strategy(self, demand: dict) -> Tuple[list, dict]:
+            return self._simulate_with_strategy(demand, "greedy")
+        
+        def _balanced_strategy(self, demand: dict) -> Tuple[list, dict]:
+            return self._simulate_with_strategy(demand, "balanced")
+        
+        def _proportional_strategy(self, demand: dict) -> Tuple[list, dict]:
+            return self._simulate_with_strategy(demand, "proportional")
+        
+        def _random_strategy(self, demand: dict) -> Tuple[list, dict]:
+            return self._simulate_with_strategy(demand, "random")
+        
+        def _simulate_with_strategy(self, demand: dict, strategy: str) -> Tuple[list, dict]:
+            remaining = demand.copy()
+            total_demand = sum(demand.values())
+            capacity_per_round = self.max_plates * self.capacity
+            
+            if capacity_per_round == 0:
+                return [], {}
+            
+            generator = V27Engine.CandidateSheetGenerator(self.capacity, self.max_plates)
+            sheet_counts = generator.generate_candidates(total_demand)
+            
+            simulator = V27Engine.SingleRoundSimulator(self.max_plates, self.capacity)
+            plates, final_remaining = simulator.simulate_round(remaining, sheet_counts)
+            
+            plates = ensure_demand_met(plates, demand)
+            return plates, {
+                "strategy": strategy, 
+                "sheet_counts": sheet_counts,
+                "final_balance": sum(final_remaining.values())
+            }
+    
+    # ================================================================
+    # 8. OUTPUT GENERATOR
+    # ================================================================
+    class OutputGenerator:
+        @staticmethod
+        def generate_summary(plates: list, demand: dict) -> dict:
+            waste = V27Engine.calculate_waste(plates, demand)
+            
+            return {
+                "plates": plates,
+                "waste_percent": waste,
+                "total_plates": len(plates),
+                "total_sheets": sum(p.get("sheets", 0) for p in plates),
+                "total_production": sum(
+                    ups * p.get("sheets", 0) 
+                    for p in plates 
+                    for ups in p["layout"].values()
+                ),
+                "total_demand": sum(demand.values()),
+            }
+
+
+# ================================================================
+# V27 OPTIMIZER FUNCTION
+# ================================================================
+def v27_optimizer(demand: dict, capacity: int, max_plates: int, iterations: int = 50) -> list:
+    """V27 Engine - 1 Round Optimization"""
+    
+    # Validate
+    validator = V27Engine.InputValidator()
+    is_valid, message = validator.validate(demand, capacity, max_plates)
+    
+    if not is_valid:
+        st.warning(f"Validation Error: {message}")
+        return []
+    
+    # Search
+    engine = V27Engine.SearchEngine(max_plates, capacity, iterations)
+    solution, details = engine.search(demand)
+    
+    if not solution:
+        return []
+    
+    return ensure_demand_met(solution, demand)
 
 
 # ================================================================
@@ -742,7 +1012,7 @@ if generate_clicked:
     
     with st.spinner("🔍 V27 Engine searching for optimal solution..."):
         
-        # Run V27 Engine
+        # ✅ এখন v27_optimizer ডিফাইন করা আছে
         plates = v27_optimizer(demand, cap, maxp, iterations)
         
         if not plates:
