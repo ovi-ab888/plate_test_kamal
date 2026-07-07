@@ -38,7 +38,7 @@ except ImportError:
 # STREAMLIT PAGE CONFIGURATION
 # ================================================================
 st.set_page_config(
-    page_title="V27 Engine - Plate Ratio System",
+    page_title="Mr Kamal - Plate Ratio System",
     page_icon="🚀",
     layout="wide",
     initial_sidebar_state="collapsed"
