@@ -1,12 +1,10 @@
 # app.py — COMPLETE PLATE RATIO SYSTEM (V27 SHEET-DRIVEN SPECIAL EDITION)
-# Design by Ovi • Max Plates Enforced & Candidate Sheets Driven Optimization
+# Design by Ovi • Max Plates Enforced • Candidate Sheets Driven Optimization
 
 import os
 import copy
-import random
 import math
 import string
-from collections import Counter
 from math import ceil, floor
 from datetime import datetime
 from io import BytesIO
@@ -147,6 +145,18 @@ st.markdown("""
     }
     .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102,126,234,0.4); }
     .stDataFrame { background: rgba(255,255,255,0.05); border-radius: 16px; padding: 0.5rem; }
+    .stNumberInput input, .stTextInput input {
+        background: rgba(255,255,255,0.08) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        border-radius: 5px !important;
+        color: white !important;
+        padding: 0.5rem 1rem !important;
+    }
+    .stNumberInput input:focus, .stTextInput input:focus {
+        border-color: #667eea !important;
+        box-shadow: 0 0 0 2px rgba(102,126,234,0.2) !important;
+        background: rgba(255,255,255,0.12) !important;
+    }
     #MainMenu, header, footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
@@ -333,23 +343,46 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
     if total_initial_demand == 0: 
         return None
     
-    # ১. এস্টিমেটেড বেস শিট
+    # Step 1: Calculate Estimated Base Sheets
     estimated_base_sheets = total_initial_demand / TOTAL_UPS
     
-    # ২. প্রোডাকশন ফ্রেন্ডলি ক্যান্ডিডেট শিটের তালিকা জেনারেট (২৫ বা ৫০ ব্যবধানে)
-    start_sheet = max(25, int(estimated_base_sheets * 0.4))
-    end_sheet = int(estimated_base_sheets * 1.7)
-    step = 50 if estimated_base_sheets > 500 else 25
+    # Step 2: Generate Production-Friendly Candidate Sheets
+    # Dynamic range based on total demand
+    if total_initial_demand <= 5000:
+        start_sheet = max(10, int(estimated_base_sheets * 0.5))
+        end_sheet = int(estimated_base_sheets * 1.5)
+        step = 5
+    elif total_initial_demand <= 20000:
+        start_sheet = max(20, int(estimated_base_sheets * 0.4))
+        end_sheet = int(estimated_base_sheets * 1.6)
+        step = 10
+    else:
+        start_sheet = max(25, int(estimated_base_sheets * 0.3))
+        end_sheet = int(estimated_base_sheets * 1.7)
+        step = 25
     
     candidate_sheets = list(range(start_sheet, end_sheet, step))
-    if int(estimated_base_sheets) not in candidate_sheets:
-        candidate_sheets.append(int(estimated_base_sheets))
+    
+    # Always include the exact estimated value
+    exact_sheet = int(estimated_base_sheets)
+    if exact_sheet not in candidate_sheets:
+        candidate_sheets.append(exact_sheet)
+    
+    # Also include some nearby values for precision
+    for i in range(-3, 4):
+        nearby = exact_sheet + i
+        if nearby > 0 and nearby not in candidate_sheets:
+            candidate_sheets.append(nearby)
+    
     candidate_sheets = sorted([c for c in candidate_sheets if c > 0])
+    
+    # For debugging - show how many candidates
+    st.info(f"🔍 Testing {len(candidate_sheets)} candidate sheet values from {candidate_sheets[0]} to {candidate_sheets[-1]}")
 
     best_result = None
     min_total_waste = float('inf')
     
-    # ৩. ক্যান্ডিডেট শিট ধরে কমপ্লিট ডাইনামিক প্লেট সিমুলেশন লুপ
+    # Step 3: Loop through each candidate sheet
     for candidate in candidate_sheets:
         current_demand = copy.deepcopy(demand_dict)
         plates_list = []
@@ -364,9 +397,12 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
             allocated_ups = {}
             total_active_demand = sum(active_sizes.values())
             
-            # শেষ প্লেটের জন্য অবশিষ্ট সব ডিমান্ড কাভার করার স্ট্র্যাটেজি
+            # ============================================================
+            # LAST PLATE STRATEGY: Cover all remaining demand
+            # ============================================================
             if run_count == max_plates:
                 if len(active_sizes) <= TOTAL_UPS:
+                    # Give at least 1 UPS to each active size
                     for size in active_sizes: 
                         allocated_ups[size] = 1
                     remaining_ups = TOTAL_UPS - sum(allocated_ups.values())
@@ -376,6 +412,7 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
                             allocated_ups[size] += 1
                             remaining_ups -= 1
                 else:
+                    # More sizes than capacity - proportional distribution
                     allocated_ups = {sz: int(floor((qty / total_active_demand) * TOTAL_UPS)) for sz, qty in active_sizes.items()}
                     remaining_ups = TOTAL_UPS - sum(allocated_ups.values())
                     for size, _ in sorted(active_sizes.items(), key=lambda x: (x[1]/total_active_demand * TOTAL_UPS) - floor((x[1]/total_active_demand) * TOTAL_UPS), reverse=True):
@@ -383,20 +420,30 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
                         allocated_ups[size] += 1
                         remaining_ups -= 1
             else:
-                # রেগুলার প্লেটের জন্য ডাইনামিক রেশিও ডিস্ট্রিবিউশন
+                # ============================================================
+                # REGULAR PLATE: Proportional distribution
+                # ============================================================
                 raw_ups = {sz: (qty / total_active_demand) * TOTAL_UPS for sz, qty in active_sizes.items()}
                 allocated_ups = {sz: max(1, int(floor(val))) for sz, val in raw_ups.items()}
                 remaining_ups = TOTAL_UPS - sum(allocated_ups.values())
+                
                 if remaining_ups > 0:
                     for size, _ in sorted(raw_ups.items(), key=lambda x: x[1] - allocated_ups[x[0]], reverse=True):
                         if remaining_ups == 0: break
                         allocated_ups[size] += 1
                         remaining_ups -= 1
+                
+                # Ensure exact capacity
                 while sum(allocated_ups.values()) > TOTAL_UPS:
                     max_tag = max(allocated_ups, key=allocated_ups.get)
-                    allocated_ups[max_tag] -= 1
+                    if allocated_ups[max_tag] > 1:
+                        allocated_ups[max_tag] -= 1
+                    else:
+                        break
 
-            # প্রথম কম্বিনেশনে ক্যান্ডিডেট শিট অ্যাসাইন হবে
+            # ============================================================
+            # DETERMINE SHEETS FOR THIS PLATE
+            # ============================================================
             if is_first_run:
                 run_sheets = candidate
                 is_first_run = False
@@ -409,8 +456,17 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
                     needed = [ceil(current_demand[sz] / max(1, allocated_ups.get(sz, 1))) for sz in active_sizes]
                     run_sheets = max(needed) if needed else 1
                 else:
-                    run_sheets = max(1, min(ceil(qty / allocated_ups.get(sz, 1)) for sz, qty in active_sizes.items()))
+                    # Calculate minimum sheets needed for this plate
+                    needed = []
+                    for sz, qty in active_sizes.items():
+                        ups = allocated_ups.get(sz, 1)
+                        if ups > 0:
+                            needed.append(ceil(qty / ups))
+                    run_sheets = max(1, min(needed)) if needed else 1
             
+            # ============================================================
+            # APPLY PRODUCTION
+            # ============================================================
             plate_production = {sz: ups * run_sheets for sz, ups in allocated_ups.items()}
             for sz, qty in plate_production.items():
                 current_demand[sz] = max(0, current_demand[sz] - qty)
@@ -424,7 +480,9 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
             })
             run_count += 1
             
-        # অপ্টিমাইজেশন ম্যাট্রিক্স স্কোরিং (মিনিমাম ওয়েস্টেজ ট্র্যাকিং)
+        # ============================================================
+        # SCORE THIS CANDIDATE
+        # ============================================================
         total_produced = {sz: 0 for sz in demand_dict.keys()}
         for p in plates_list:
             for sz, qty in p["production"].items(): 
@@ -432,6 +490,7 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
         
         scenario_waste = sum(max(0, total_produced[sz] - target) for sz, target in demand_dict.items())
         
+        # Track the best (minimum waste)
         if scenario_waste < min_total_waste:
             min_total_waste = scenario_waste
             best_result = {
@@ -459,12 +518,19 @@ st.markdown('</div>', unsafe_allow_html=True)
 # ================================================================
 # INPUT METHOD ROUTING
 # ================================================================
-input_mode = st.radio("Choose Preferred Input Pipeline:", options=["✏️ Manual Input Matrix", "📂 Automated Excel Pipeline (.xlsx)"], horizontal=True)
+input_mode = st.radio(
+    "Choose Preferred Input Pipeline:", 
+    options=["✏️ Manual Input Matrix", "📂 Automated Excel Pipeline (.xlsx)"], 
+    horizontal=True
+)
 
 styles_dict, colors_dict, sizes_dict, original_qty, demand_dict = {}, {}, {}, {}, {}
 tags = []
 
 if "✏️ Manual Input Matrix" in input_mode:
+    # ============================================================
+    # MANUAL INPUT
+    # ============================================================
     st.markdown('<div class="card">', unsafe_allow_html=True)
     for i in range(n):
         c1, c2, c3, c4, c5 = st.columns([0.5, 1.5, 1.5, 1.5, 2])
@@ -479,36 +545,126 @@ if "✏️ Manual Input Matrix" in input_mode:
         styles_dict[tag], colors_dict[tag], sizes_dict[tag], original_qty[tag] = style_val, color_val, size_val, qty_val
         demand_dict[tag] = int(qty_val * (1 + addon / 100))
     st.markdown('</div>', unsafe_allow_html=True)
+
 else:
+    # ============================================================
+    # EXCEL UPLOAD - COMPLETE FIXED
+    # ============================================================
     st.markdown('<div class="card"><div class="card-title">📂 Upload Industrial Production Matrix</div>', unsafe_allow_html=True)
     uploaded_file = st.file_uploader("Upload .xlsx Spreadsheet Matrix", type=["xlsx"])
+    
     if uploaded_file:
         try:
-            # Skiprows fixed to skip exactly 29 lines of metadata and headers
-            df_xl = pd.read_excel(uploaded_file, skiprows=29)
-            st.success("Production Matrix Extracted Successfully!")
+            # ✅ সরাসরি ফাইল পড়ুন - skiprows নেই
+            df_xl = pd.read_excel(uploaded_file)
+            
+            # ✅ খালি রো বাদ দিন
+            df_xl = df_xl.dropna(how='all')
+            
+            st.success("✅ Production Matrix Extracted Successfully!")
+            
+            # 🔍 ডেটা প্রিভিউ দেখান
             st.dataframe(df_xl.head(10), use_container_width=True)
             
+            # ✅ কলাম ডিটেক্ট করুন
             columns_list = list(df_xl.columns)
-            c_1, c_2, c_3, c_4 = st.columns(4)
-            style_col = c_1.selectbox("Map Style Target Column", columns_list, index=0 if "Style" not in columns_list else columns_list.index("Style"))
-            color_col = c_2.selectbox("Map Color Target Column", columns_list, index=min(1, len(columns_list)-1) if "Color" not in columns_list else columns_list.index("Color"))
-            size_col = c_3.selectbox("Map Size Target Column", columns_list, index=min(2, len(columns_list)-1) if "Size" not in columns_list else columns_list.index("Size"))
-            qty_col = c_4.selectbox("Map Volume Target Column", columns_list, index=min(3, len(columns_list)-1) if "Quantity" not in columns_list else columns_list.index("Quantity"))
             
+            # ✅ স্মার্ট কলাম ডিটেকশন
+            style_col = None
+            color_col = None
+            size_col = None
+            qty_col = None
+            
+            for col in columns_list:
+                col_lower = str(col).lower().strip()
+                if 'style' in col_lower or 'product' in col_lower:
+                    style_col = col
+                elif 'color' in col_lower or 'colour' in col_lower:
+                    color_col = col
+                elif 'size' in col_lower:
+                    size_col = col
+                elif 'qty' in col_lower or 'quantity' in col_lower or 'total' in col_lower:
+                    qty_col = col
+            
+            # ✅ যদি কোনো কলাম ডিটেক্ট না হয়, তাহলে ইউজারকে সিলেক্ট করতে দিন
+            if not style_col or not color_col or not size_col or not qty_col:
+                st.info("🔍 Please map the correct columns from your Excel file:")
+                
+                col_map1, col_map2, col_map3, col_map4 = st.columns(4)
+                
+                # স্মার্ট ডিফল্ট ইনডেক্স
+                default_style = columns_list.index(style_col) if style_col in columns_list else 0
+                default_color = columns_list.index(color_col) if color_col in columns_list else min(1, len(columns_list)-1)
+                default_size = columns_list.index(size_col) if size_col in columns_list else min(2, len(columns_list)-1)
+                default_qty = columns_list.index(qty_col) if qty_col in columns_list else min(3, len(columns_list)-1)
+                
+                with col_map1:
+                    style_col = st.selectbox("🎨 Style Column", columns_list, index=default_style)
+                with col_map2:
+                    color_col = st.selectbox("🌈 Color Column", columns_list, index=default_color)
+                with col_map3:
+                    size_col = st.selectbox("📏 Size Column", columns_list, index=default_size)
+                with col_map4:
+                    qty_col = st.selectbox("📊 Quantity Column", columns_list, index=default_qty)
+            
+            # ✅ ডেটা প্রসেস করুন
+            items_loaded = 0
             for index, row in df_xl.iterrows():
-                st_val = str(row.get(style_col, 'N/A')).strip()
-                cl_val = str(row.get(color_col, 'N/A')).strip()
-                sz_val = str(row.get(size_col, 'N/A')).strip()
-                q_val = int(row[qty_col]) if pd.notnull(row.get(qty_col)) else 0
+                # Check if row has valid data
+                if row.isnull().all():
+                    continue
+                
+                # Get values safely
+                style_val = str(row.get(style_col, '')).strip() if pd.notnull(row.get(style_col)) else ''
+                color_val = str(row.get(color_col, '')).strip() if pd.notnull(row.get(color_col)) else ''
+                size_val = str(row.get(size_col, '')).strip() if pd.notnull(row.get(size_col)) else ''
+                
+                # Quantity with safe conversion
+                qty_raw = row.get(qty_col, 0)
+                if pd.isnull(qty_raw) or qty_raw == '':
+                    continue
+                
+                try:
+                    q_val = int(float(qty_raw))
+                except (ValueError, TypeError):
+                    continue
                 
                 if q_val > 0:
-                    tag = f"Item_{index+1}_{st_val}_{sz_val}"
+                    tag = f"Item_{index+1}_{style_val}_{size_val}"
                     tags.append(tag)
-                    styles_dict[tag], colors_dict[tag], sizes_dict[tag], original_qty[tag] = st_val, cl_val, sz_val, q_val
+                    styles_dict[tag] = style_val if style_val else "N/A"
+                    colors_dict[tag] = color_val if color_val else "N/A"
+                    sizes_dict[tag] = size_val if size_val else "N/A"
+                    original_qty[tag] = q_val
                     demand_dict[tag] = int(q_val * (1 + addon / 100))
+                    items_loaded += 1
+            
+            if items_loaded > 0:
+                st.success(f"✅ Successfully loaded {items_loaded} items from Excel!")
+                st.info(f"📋 Columns mapped: Style='{style_col}', Color='{color_col}', Size='{size_col}', Quantity='{qty_col}'")
+                
+                # ✅ প্রিভিউ দেখান
+                preview_data = []
+                for t in tags[:10]:
+                    preview_data.append({
+                        "Style": styles_dict.get(t, ""),
+                        "Color": colors_dict.get(t, ""),
+                        "Size": sizes_dict.get(t, ""),
+                        "Quantity": original_qty.get(t, 0)
+                    })
+                preview_df = pd.DataFrame(preview_data)
+                st.dataframe(preview_df, use_container_width=True)
+                
+            else:
+                st.warning("⚠️ No valid data found. Please check your Excel file format.")
+                st.info("💡 Expected format: Columns with headers like 'Style', 'Color', 'Size', 'Quantity'")
+                
         except Exception as e:
-            st.error(f"Spreadsheet Parsing Blocked: {str(e)}")
+            st.error(f"❌ Error parsing Excel: {str(e)}")
+            st.info("💡 Make sure your Excel file has columns: Style, Color, Size, Quantity")
+    else:
+        st.info("📤 Please upload an Excel file to continue.")
+    
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -517,8 +673,22 @@ else:
 # ================================================================
 if tags and sum(original_qty.values()) > 0:
     st.markdown('<div class="card">', unsafe_allow_html=True)
+    
+    # Show data preview
+    preview_df = pd.DataFrame({
+        "Item": tags[:10],
+        "Style": [styles_dict.get(t, "") for t in tags[:10]],
+        "Color": [colors_dict.get(t, "") for t in tags[:10]],
+        "Size": [sizes_dict.get(t, "") for t in tags[:10]],
+        "Quantity": [original_qty.get(t, 0) for t in tags[:10]]
+    })
+    
+    if len(tags) > 10:
+        st.info(f"📊 Showing first 10 of {len(tags)} items")
+    st.dataframe(preview_df, use_container_width=True)
+    
     if st.button("🚀 Run V27 Candidate Sheet Simulation Solver", type="primary"):
-        with st.spinner("Processing Matrix Multi-Pass Scenarios..."):
+        with st.spinner("🔄 Processing Matrix Multi-Pass Scenarios..."):
             res = algo_v27_candidate_sheet_optimization(demand_dict, cap, int(maxp))
             if res:
                 final_plates = ensure_demand_met(res["plates"], demand_dict)
@@ -528,7 +698,15 @@ if tags and sum(original_qty.values()) > 0:
                 st.session_state['v27_plates'] = final_plates
                 st.session_state['v27_waste'] = w_percent
                 st.session_state['v27_cand'] = res["candidate_sheet"]
+                st.session_state['v27_produced'] = res.get("produced", {})
                 st.session_state['run_success'] = True
+                st.session_state['demand_dict'] = demand_dict
+                st.session_state['original_qty'] = original_qty
+                st.session_state['styles_dict'] = styles_dict
+                st.session_state['colors_dict'] = colors_dict
+                st.session_state['sizes_dict'] = sizes_dict
+            else:
+                st.error("❌ No solution found. Please check your inputs.")
     st.markdown('</div>', unsafe_allow_html=True)
 
 
@@ -540,7 +718,12 @@ if st.session_state.get('run_success', False):
     w_percent = st.session_state['v27_waste']
     cand_sheet = st.session_state['v27_cand']
     
-    st.markdown(f'<div class="best-algo">🎖️ Best Candidate Print Sheet Selected: {cand_sheet} Sheets </div>', unsafe_allow_html=True)
+    st.markdown(f'''
+    <div class="best-algo">
+        🎖️ Best Candidate Print Sheet Selected: <strong>{cand_sheet}</strong> Sheets 
+        <span style="margin-left: 20px; font-size: 1rem;">| Waste: {w_percent}%</span>
+    </div>
+    ''', unsafe_allow_html=True)
     
     cm1, cm2, cm3 = st.columns(3)
     cm1.markdown(f'<div class="metric-card"><div class="metric-value">{len(plates)}</div><div class="metric-label">Active Plates Formed</div></div>', unsafe_allow_html=True)
@@ -549,34 +732,80 @@ if st.session_state.get('run_success', False):
     
     st.write("##")
     
-    # Summary Sheet Output
+    # ============================================================
+    # SUMMARY SHEET OUTPUT (ONLY)
+    # ============================================================
     st.markdown('<div class="card"><div class="card-title">📊 Final Optimized Production Matrix</div>', unsafe_allow_html=True)
-    df_summary = build_full_summary(plates, demand_dict, original_qty)
+    df_summary = build_full_summary(plates, st.session_state['demand_dict'], st.session_state['original_qty'])
     if not df_summary.empty:
-        df_summary['Tag'] = df_summary['Tag'].apply(lambda x: styles_dict.get(x, x) if x != "TOTAL" else "TOTAL")
+        styles_local = st.session_state.get('styles_dict', {})
+        df_summary['Tag'] = df_summary['Tag'].apply(lambda x: styles_local.get(x, x) if x != "TOTAL" else "TOTAL")
     st.dataframe(df_summary, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Detailed Expander Matrices
-    st.markdown('<div class="card"><div class="card-title">🛠️ Micro Layout Formats per Plate</div>', unsafe_allow_html=True)
-    for p in plates:
-        with st.expander(f"⚙️ Plate {p['name']} Layout Structure — ({p['sheets']} Sheets)", expanded=True):
-            p_cols = st.columns(2)
-            with p_cols[0]:
-                st.write("**Plate Ratio Allocation (UPS):**")
-                st.json({sizes_dict.get(k, k): v for k, v in p["layout"].items() if v > 0})
-            with p_cols[1]:
-                st.write("**Net Physical Production Outputs:**")
-                st.json({sizes_dict.get(k, k): v for k, v in p["production"].items() if v > 0})
-    st.markdown('</div>', unsafe_allow_html=True)
+    # ============================================================
+    # ❌ MICRO LAYOUT FORMATS PER PLATE - REMOVED
+    # ============================================================
+    # এই অংশটি সম্পূর্ণ রিমুভ করা হয়েছে
     
-    # Documentation Export Pipeline
-    if REPORTLAB_AVAILABLE:
-        st.markdown('<div class="card"><div class="card-title">📄 Industrial Documentation Pipeline</div>', unsafe_allow_html=True)
-        pdf_buffer = generate_pdf_report(plates, demand_dict, original_qty, "V27 Candidate Sheet Driver", w_percent, styles_dict, colors_dict, sizes_dict, job_number)
-        if pdf_buffer:
-            st.download_button("📥 Download Ratio Breakdown PDF Report", pdf_buffer, f"{job_number}_V27_Analysis.pdf", mime="application/pdf", use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+    # ============================================================
+    # DOWNLOAD REPORTS
+    # ============================================================
+    st.markdown('<div class="card"><div class="card-title">📥 Download Reports</div>', unsafe_allow_html=True)
+    
+    col_d1, col_d2 = st.columns(2)
+    
+    with col_d1:
+        # Excel Download
+        bio_excel = BytesIO()
+        with pd.ExcelWriter(bio_excel, engine="openpyxl") as writer:
+            df_summary.to_excel(writer, sheet_name="Summary", index=False)
+            
+            # Plate details
+            plate_rows = []
+            for p in plates:
+                plate_rows.append({
+                    "Plate ID": p["name"],
+                    "Sheets": p["sheets"],
+                    "Total UPS": sum(p["layout"].values()),
+                    "Layout": str(p["layout"])
+                })
+            pd.DataFrame(plate_rows).to_excel(writer, sheet_name="Plate Details", index=False)
+        
+        bio_excel.seek(0)
+        st.download_button(
+            "📊 Download Excel Report",
+            bio_excel,
+            f"{job_number}_V27_Report.xlsx",
+            use_container_width=True
+        )
+    
+    with col_d2:
+        # PDF Download
+        if REPORTLAB_AVAILABLE:
+            pdf_buffer = generate_pdf_report(
+                plates, 
+                st.session_state['demand_dict'], 
+                st.session_state['original_qty'], 
+                "V27 Candidate Sheet Driver", 
+                w_percent, 
+                st.session_state.get('styles_dict', {}),
+                st.session_state.get('colors_dict', {}),
+                st.session_state.get('sizes_dict', {}),
+                job_number
+            )
+            if pdf_buffer:
+                st.download_button(
+                    "📄 Download PDF Report",
+                    pdf_buffer,
+                    f"{job_number}_V27_Analysis.pdf",
+                    mime="application/pdf",
+                    use_container_width=True
+                )
+        else:
+            st.info("ℹ️ PDF requires reportlab. Install: pip install reportlab")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ================================================================
@@ -586,5 +815,8 @@ st.markdown("""
 <div style="text-align: center; padding: 2rem; margin-top: 3rem; border-top: 2px solid rgba(102,126,234,0.3); background: rgba(255,255,255,0.02); border-radius: 20px;">
     <p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin: 0;">© 2026 Plate Ratio System | Version 27 (Candidate Sheet Edition)</p>
     <p style="color: rgba(255,255,255,0.4); font-size: 0.8rem; margin: 5px 0;">Optimized Framework Engine • Injected with Sheet Driver Automations • Production Ready</p>
+    <p style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 0.85rem; font-weight: 600; margin: 10px 0 0 0;">
+        ✨ Developed by Ovi | All Rights Reserved ✨
+    </p>
 </div>
 """, unsafe_allow_html=True)
