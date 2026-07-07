@@ -336,53 +336,34 @@ def generate_pdf_report(plates: list, demand: dict, original_qty: dict,
 def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_plates=3):
     """
     Simulates all matching candidate round sheets based on actual demand metrics.
-    Completely eliminates rigid scaling multipliers.
+    NEW RULE: Candidate sheets for PLATE A will ALWAYS be less than or equal to estimated base sheets.
     """
     TOTAL_UPS = plate_capacity
     total_initial_demand = sum(demand_dict.values())
     if total_initial_demand == 0: 
         return None
     
-    # Step 1: Calculate Estimated Base Sheets
+    # ১. মোট ডিমান্ড ও UPS ভাগ করে গড় (Base Sheets) বের করা
     estimated_base_sheets = total_initial_demand / TOTAL_UPS
     
-    # Step 2: Generate Production-Friendly Candidate Sheets
-    # Dynamic range based on total demand
-    if total_initial_demand <= 5000:
-        start_sheet = max(10, int(estimated_base_sheets * 0.5))
-        end_sheet = int(estimated_base_sheets * 1.5)
-        step = 5
-    elif total_initial_demand <= 20000:
-        start_sheet = max(20, int(estimated_base_sheets * 0.4))
-        end_sheet = int(estimated_base_sheets * 1.6)
-        step = 10
-    else:
-        start_sheet = max(25, int(estimated_base_sheets * 0.3))
-        end_sheet = int(estimated_base_sheets * 1.7)
-        step = 25
+    # ২. ক্যান্ডিডেট সিলেকশন (ওভি ভাইয়ের নতুন লজিক: শুধুমাত্র Plate A এর জন্য গড় শিটের কম বা সমান হবে)
+    start_sheet = max(25, int(estimated_base_sheets * 0.4))
+    end_sheet = int(floor(estimated_base_sheets))  # সর্বোচ্চ লিমিট গড় শিট পর্যন্ত (Round-Down)
+    step = 50 if estimated_base_sheets > 500 else 25
     
-    candidate_sheets = list(range(start_sheet, end_sheet, step))
+    # রেঞ্জ তৈরি
+    candidate_sheets = list(range(start_sheet, end_sheet + 1, step))
     
-    # Always include the exact estimated value
-    exact_sheet = int(estimated_base_sheets)
-    if exact_sheet not in candidate_sheets:
-        candidate_sheets.append(exact_sheet)
-    
-    # Also include some nearby values for precision
-    for i in range(-3, 4):
-        nearby = exact_sheet + i
-        if nearby > 0 and nearby not in candidate_sheets:
-            candidate_sheets.append(nearby)
-    
+    # যদি লিস্ট খালি হয়ে যায় বা কোনো কারণে ইনক্লুড না হয়, তবে রাউন্ড-ডাউন বেস শিট অ্যাড হবে
+    if end_sheet not in candidate_sheets and end_sheet > 0:
+        candidate_sheets.append(end_sheet)
+        
     candidate_sheets = sorted([c for c in candidate_sheets if c > 0])
-    
-    # For debugging - show how many candidates
-    st.info(f"🔍 Testing {len(candidate_sheets)} candidate sheet values from {candidate_sheets[0]} to {candidate_sheets[-1]}")
 
     best_result = None
     min_total_waste = float('inf')
     
-    # Step 3: Loop through each candidate sheet
+    # ৩. ক্যান্ডিডেট শিট ধরে ডাইনামিক প্লেট সিমুলেশন লুপ
     for candidate in candidate_sheets:
         current_demand = copy.deepcopy(demand_dict)
         plates_list = []
@@ -397,12 +378,9 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
             allocated_ups = {}
             total_active_demand = sum(active_sizes.values())
             
-            # ============================================================
-            # LAST PLATE STRATEGY: Cover all remaining demand
-            # ============================================================
+            # শেষ প্লেটের জন্য অবশিষ্ট কাভার স্ট্র্যাটেজি
             if run_count == max_plates:
                 if len(active_sizes) <= TOTAL_UPS:
-                    # Give at least 1 UPS to each active size
                     for size in active_sizes: 
                         allocated_ups[size] = 1
                     remaining_ups = TOTAL_UPS - sum(allocated_ups.values())
@@ -412,7 +390,6 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
                             allocated_ups[size] += 1
                             remaining_ups -= 1
                 else:
-                    # More sizes than capacity - proportional distribution
                     allocated_ups = {sz: int(floor((qty / total_active_demand) * TOTAL_UPS)) for sz, qty in active_sizes.items()}
                     remaining_ups = TOTAL_UPS - sum(allocated_ups.values())
                     for size, _ in sorted(active_sizes.items(), key=lambda x: (x[1]/total_active_demand * TOTAL_UPS) - floor((x[1]/total_active_demand) * TOTAL_UPS), reverse=True):
@@ -420,30 +397,20 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
                         allocated_ups[size] += 1
                         remaining_ups -= 1
             else:
-                # ============================================================
-                # REGULAR PLATE: Proportional distribution
-                # ============================================================
+                # রেগুলার প্লেটের রেশিও ডিস্ট্রিবিউশন
                 raw_ups = {sz: (qty / total_active_demand) * TOTAL_UPS for sz, qty in active_sizes.items()}
                 allocated_ups = {sz: max(1, int(floor(val))) for sz, val in raw_ups.items()}
                 remaining_ups = TOTAL_UPS - sum(allocated_ups.values())
-                
                 if remaining_ups > 0:
                     for size, _ in sorted(raw_ups.items(), key=lambda x: x[1] - allocated_ups[x[0]], reverse=True):
                         if remaining_ups == 0: break
                         allocated_ups[size] += 1
                         remaining_ups -= 1
-                
-                # Ensure exact capacity
                 while sum(allocated_ups.values()) > TOTAL_UPS:
                     max_tag = max(allocated_ups, key=allocated_ups.get)
-                    if allocated_ups[max_tag] > 1:
-                        allocated_ups[max_tag] -= 1
-                    else:
-                        break
+                    allocated_ups[max_tag] -= 1
 
-            # ============================================================
-            # DETERMINE SHEETS FOR THIS PLATE
-            # ============================================================
+            # প্রথম প্লেটে (Plate A) ক্যান্ডিডেট শিট অ্যাসাইন (যা সবসময় গড় শিটের কম)
             if is_first_run:
                 run_sheets = candidate
                 is_first_run = False
@@ -452,21 +419,13 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
                     if needed: 
                         run_sheets = max(run_sheets, max(needed))
             else:
+                # পরবর্তী প্লেটগুলোর (Plate B, C...) ক্ষেত্রে ডিমান্ড মেলাতে প্রয়োজনীয় শিট ডাইনামিকালি সেট হবে
                 if run_count == max_plates:
                     needed = [ceil(current_demand[sz] / max(1, allocated_ups.get(sz, 1))) for sz in active_sizes]
                     run_sheets = max(needed) if needed else 1
                 else:
-                    # Calculate minimum sheets needed for this plate
-                    needed = []
-                    for sz, qty in active_sizes.items():
-                        ups = allocated_ups.get(sz, 1)
-                        if ups > 0:
-                            needed.append(ceil(qty / ups))
-                    run_sheets = max(1, min(needed)) if needed else 1
+                    run_sheets = max(1, min(ceil(qty / allocated_ups.get(sz, 1)) for sz, qty in active_sizes.items()))
             
-            # ============================================================
-            # APPLY PRODUCTION
-            # ============================================================
             plate_production = {sz: ups * run_sheets for sz, ups in allocated_ups.items()}
             for sz, qty in plate_production.items():
                 current_demand[sz] = max(0, current_demand[sz] - qty)
@@ -480,9 +439,7 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
             })
             run_count += 1
             
-        # ============================================================
-        # SCORE THIS CANDIDATE
-        # ============================================================
+        # ওয়েস্টেজ ক্যালকুলেশন এবং বেস্ট স্কোর চেকিং
         total_produced = {sz: 0 for sz in demand_dict.keys()}
         for p in plates_list:
             for sz, qty in p["production"].items(): 
@@ -490,7 +447,6 @@ def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_pl
         
         scenario_waste = sum(max(0, total_produced[sz] - target) for sz, target in demand_dict.items())
         
-        # Track the best (minimum waste)
         if scenario_waste < min_total_waste:
             min_total_waste = scenario_waste
             best_result = {
