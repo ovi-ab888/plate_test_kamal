@@ -1,19 +1,15 @@
-# ================================================================
-# app.py — V27 ENGINE ONLY (FIXED)
-# Pure V27 Engine Application
-# Design by Ovi
-# ================================================================
+# app.py — COMPLETE PLATE RATIO SYSTEM (V27 SHEET-DRIVEN SPECIAL EDITION)
+# Design by Ovi • Max Plates Enforced & Candidate Sheets Driven Optimization
 
 import os
 import copy
 import random
 import math
 import string
-from collections import defaultdict
+from collections import Counter
 from math import ceil, floor
 from datetime import datetime
 from io import BytesIO
-from typing import Dict, List, Tuple, Optional
 
 os.environ["OPENBLAS_NUM_THREADS"] = "1"
 
@@ -21,9 +17,8 @@ import streamlit as st
 import pandas as pd
 
 # ================================================================
-# LIBRARY IMPORTS & CHECKS
+# LIBRARY IMPORTS & CHECKS FOR PDF GENERATION
 # ================================================================
-
 try:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
@@ -34,25 +29,27 @@ try:
 except ImportError:
     REPORTLAB_AVAILABLE = False
 
+
 # ================================================================
 # STREAMLIT PAGE CONFIGURATION
 # ================================================================
 st.set_page_config(
-    page_title="Mr Kamal - Plate Ratio System",
-    page_icon="🚀",
+    page_title="Plate Ratio System - V27 Sheet Edition",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
 
+
 # ================================================================
-# CSS STYLING
+# MODERN UI STYLING & CUSTOM CSS
 # ================================================================
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     * { font-family: 'Inter', sans-serif; }
-    .stApp {
-        background: linear-gradient(-45deg, #0f0c29, #1a1a3e, #24243e, #1a1a3e);
+    .stApp { 
+        background: linear-gradient(135deg, #0f0c29 0%, #1a1a3e 50%, #24243e 100%);
         background-size: 400% 400%;
         animation: gradientShift 15s ease infinite;
     }
@@ -62,28 +59,24 @@ st.markdown("""
         100% { background-position: 0% 50%; }
     }
     .main-header {
-        background: linear-gradient(135deg, rgba(102,126,234,0.15) 0%, rgba(118,75,162,0.15) 100%);
+        background: linear-gradient(135deg, rgba(102,126,234,0.1) 0%, rgba(118,75,162,0.1) 100%);
         backdrop-filter: blur(10px);
-        padding: 2rem;
-        border-radius: 30px;
-        margin: 1rem 1rem 2rem 1rem;
+        padding: 2rem 2rem;
+        margin-bottom: 2rem;
         text-align: center;
+        border-radius: 30px;
         border: 1px solid rgba(255,255,255,0.1);
     }
     .main-header h1 {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        font-size: 2.8rem;
-        font-weight: 800;
+        font-size: 2.5rem;
+        font-weight: 700;
         margin: 0;
     }
-    .main-header .subtitle {
-        color: rgba(255,255,255,0.7);
-        font-size: 1.1rem;
-        margin-top: 0.3rem;
-    }
-    .main-header .designer {
+    .main-header p { color: rgba(255,255,255,0.7); margin-top: 0.5rem; }
+    .designer-name {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
@@ -112,7 +105,24 @@ st.markdown("""
         margin-bottom: 1rem;
         padding-bottom: 0.5rem;
     }
-    .result-card {
+    .metric-card {
+        background: linear-gradient(135deg, rgba(102,126,234,0.2) 0%, rgba(118,75,162,0.2) 100%);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 1rem;
+        color: white;
+        text-align: center;
+        border: 1px solid rgba(255,255,255,0.1);
+    }
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+    .metric-label { font-size: 0.85rem; color: rgba(255,255,255,0.7); margin-top: 0.5rem; }
+    .best-algo {
         background: linear-gradient(135deg, #00b09b 0%, #96c93d 100%);
         border-radius: 20px;
         padding: 1.5rem;
@@ -121,14 +131,8 @@ st.markdown("""
         border: none;
         box-shadow: 0 10px 30px rgba(0,176,155,0.3);
         margin-bottom: 2rem;
-    }
-    .result-card .big-number {
-        font-size: 2.5rem;
-        font-weight: 700;
-    }
-    .result-card .label {
-        font-size: 0.9rem;
-        opacity: 0.9;
+        font-size: 1.2rem;
+        font-weight: 600;
     }
     .stButton > button {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -142,54 +146,29 @@ st.markdown("""
         font-size: 1rem;
     }
     .stButton > button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102,126,234,0.4); }
-    .stNumberInput input, .stTextInput input {
-        background: rgba(255,255,255,0.08) !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
-        border-radius: 5px !important;
-        color: white !important;
-        padding: 0.5rem 1rem !important;
-    }
     .stDataFrame { background: rgba(255,255,255,0.05); border-radius: 16px; padding: 0.5rem; }
-    .metric-item {
-        background: rgba(255,255,255,0.05);
-        border-radius: 12px;
-        padding: 1rem;
-        text-align: center;
-        border: 1px solid rgba(255,255,255,0.08);
-    }
-    .metric-item .value {
-        font-size: 1.5rem;
-        font-weight: 700;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-    }
-    .metric-item .label {
-        font-size: 0.75rem;
-        color: rgba(255,255,255,0.6);
-        margin-top: 0.2rem;
-    }
     #MainMenu, header, footer {visibility: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
+
 # ================================================================
-# HEADER
+# HEADER DISPLAY
 # ================================================================
 st.markdown("""
 <div class="main-header">
-    <h1>🚀 V27 Engine</h1>
-    <div class="subtitle">Smart Production Planning & Ratio Optimization</div>
-    <div class="designer">✨ Design by Ovi ✨</div>
+    <h1>📊 Plate Ratio Intelligence System</h1>
+    <p>Algorithm V27 • Expert Candidate Sheet-Driven Optimization</p>
+    <div class="designer-name">✨ Design by Ovi ✨</div>
 </div>
 """, unsafe_allow_html=True)
+
 
 # ================================================================
 # HELPER FUNCTIONS
 # ================================================================
-
 def plate_name(n: int) -> str:
-    """Convert number to Excel-style column name"""
+    """Convert number to Alphabetical ID (A, B, C... Z, AA...)"""
     n -= 1
     chars = string.ascii_uppercase
     out = ""
@@ -200,1070 +179,412 @@ def plate_name(n: int) -> str:
             break
     return out
 
-def ensure_demand_met(plates: list, demand: dict) -> list:
-    """Ensure all demand is met"""
-    if not plates:
-        return plates
-    
-    for tag in demand.keys():
-        total_produced = 0
-        for plate in plates:
-            total_produced += plate["layout"].get(tag, 0) * plate["sheets"]
-        
-        if total_produced < demand.get(tag, 0):
-            shortfall = demand.get(tag, 0) - total_produced
-            if plates:
-                last_plate = plates[-1]
-                ups = last_plate["layout"].get(tag, 1)
-                additional_sheets = ceil(shortfall / max(1, ups))
-                last_plate["sheets"] += additional_sheets
-    
-    for idx, plate in enumerate(plates):
-        if "name" not in plate:
-            plate["name"] = plate_name(idx + 1)
-    
-    return plates
 
 def calculate_waste_percent(plates: list, demand: dict) -> float:
-    """Calculate waste percentage"""
+    """Calculate material waste percentage"""
     total_produced = 0
     total_demand = sum(demand.values())
-    
-    if total_demand == 0:
+    if total_demand == 0: 
         return 0.0
 
-    for plate in plates:
-        for tag, ups in plate["layout"].items():
-            total_produced += ups * plate.get("sheets", 0)
-
-    if total_produced == 0:
-        return 100.0
-
-    waste = total_produced - total_demand
-    waste_percent = (waste / total_produced) * 100
-    
-    if waste_percent < 0:
-        waste_percent = 0.0
-    
-    return round(waste_percent, 2)
-
-def build_full_summary(plates: list, demand: dict, original_qty: dict) -> pd.DataFrame:
-    """Build complete summary DataFrame"""
-    rows = []
-    sl = 1
-
-    for tag in demand.keys():
-        row = {
-            "SL": sl,
-            "Tag": tag,
-            "Original QTY": original_qty.get(tag, 0),
-            "Produced (+Add-on)": demand[tag]
-        }
-
-        for idx, p in enumerate(plates):
-            if p and "layout" in p and "name" in p:
-                ups = p["layout"].get(tag, 0)
-                row[f"Plate {p['name']}"] = ups
-            else:
-                row[f"Plate {idx+1}"] = 0
-
-        total_produced = 0
+    for tag in demand:
+        produced_qty = 0
         for p in plates:
             if p and "layout" in p:
-                ups = p["layout"].get(tag, 0)
-                sheets = p.get("sheets", 0)
-                total_produced += ups * sheets
+                produced_qty += p["layout"].get(tag, 0) * p.get("sheets", 0)
+        total_produced += produced_qty
 
+    if total_produced == 0: 
+        return 100.0
+    waste = total_produced - total_demand
+    return round(max(0, (waste / total_produced) * 100), 2)
+
+
+def ensure_demand_met(plates: list, demand: dict) -> list:
+    """Adjust sheets to ensure absolutely no shortfall across any size"""
+    if not plates: 
+        return plates
+    for tag in demand.keys():
+        total_produced = sum(p["layout"].get(tag, 0) * p["sheets"] for p in plates)
+        if total_produced < demand[tag]:
+            shortfall = demand[tag] - total_produced
+            last_plate = plates[-1]
+            ups = max(1, last_plate["layout"].get(tag, 1))
+            last_plate["sheets"] += ceil(shortfall / ups)
+            
+    for p in plates:
+        p["production"] = {tag: ups * p["sheets"] for tag, ups in p["layout"].items()}
+    return plates
+
+
+def build_full_summary(plates: list, demand: dict, original_qty: dict) -> pd.DataFrame:
+    """Generate final presentation data matrix"""
+    rows = []
+    sl = 1
+    for tag in demand.keys():
+        row = {
+            "SL": sl, 
+            "Tag": tag, 
+            "Original QTY": original_qty.get(tag, 0), 
+            "Produced (+Add-on)": demand[tag]
+        }
+        for p in plates:
+            row[f"Plate {p['name']}"] = p["layout"].get(tag, 0)
+            
+        total_produced = sum(p["layout"].get(tag, 0) * p["sheets"] for p in plates)
         excess = total_produced - demand[tag]
-        excess_percent = round((excess / demand[tag]) * 100, 2) if demand[tag] else 0
-
         row["Total Produced QTY"] = total_produced
         row["Excess"] = max(0, excess)
-        row["Excess %"] = f"{max(0, excess_percent)}%"
+        row["Excess %"] = f"{round((excess / demand[tag]) * 100, 2) if demand[tag] else 0}%"
         rows.append(row)
         sl += 1
 
-    if not rows:
-        return pd.DataFrame()
-
     df = pd.DataFrame(rows)
-
     total_row = {
-        "SL": "📊",
-        "Tag": "TOTAL",
-        "Original QTY": df["Original QTY"].sum(),
-        "Produced (+Add-on)": df["Produced (+Add-on)"].sum(),
+        "SL": "📊", 
+        "Tag": "TOTAL", 
+        "Original QTY": df["Original QTY"].sum(), 
+        "Produced (+Add-on)": df["Produced (+Add-on)"].sum()
     }
-
-    for idx, p in enumerate(plates):
-        col_name = f"Plate {p['name']}" if "name" in p else f"Plate {idx+1}"
-        if col_name in df.columns:
-            total_row[col_name] = df[col_name].sum()
-        else:
-            total_row[col_name] = 0
-
+    for p in plates:
+        total_row[f"Plate {p['name']}"] = df[f"Plate {p['name']}"].sum()
+        
     total_row["Total Produced QTY"] = df["Total Produced QTY"].sum()
-    total_excess = df["Excess"].sum()
-    total_row["Excess"] = total_excess
+    total_row["Excess"] = df["Excess"].sum()
     
-    total_produced_qty = total_row["Total Produced QTY"]
-    total_excess_percent = round((total_excess / total_produced_qty) * 100, 2) if total_produced_qty > 0 else 0
-    total_row["Excess %"] = f"{total_excess_percent}%"
+    total_prod_sum = total_row["Total Produced QTY"]
+    total_row["Excess %"] = f"{round((df['Excess'].sum() / total_prod_sum) * 100, 2) if total_prod_sum else 0}%"
+    
+    return pd.concat([df, pd.DataFrame([total_row])], ignore_index=True)
 
-    df = pd.concat([df, pd.DataFrame([total_row])], ignore_index=True)
-    return df
 
 def generate_pdf_report(plates: list, demand: dict, original_qty: dict,
                         algo_name: str, waste_percent: float,
-                        styles_dict: dict = None, colors_dict: dict = None, 
-                        sizes_dict: dict = None, job_number: str = "") -> BytesIO | None:
-    """Generate professional PDF report"""
-    if not REPORTLAB_AVAILABLE:
+                        styles_dict: dict, colors_dict: dict, sizes_dict: dict, job_number: str) -> BytesIO or None:
+    """Generate official ReportLab PDF documentation"""
+    if not REPORTLAB_AVAILABLE: 
         return None
-
     try:
         buffer = BytesIO()
-        doc = SimpleDocTemplate(
-            buffer, pagesize=landscape(A4),
-            rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20
-        )
+        doc = SimpleDocTemplate(buffer, pagesize=landscape(A4), rightMargin=20, leftMargin=20, topMargin=20, bottomMargin=20)
         styles = getSampleStyleSheet()
 
-        title_style = ParagraphStyle(
-            'CustomTitle', parent=styles['Heading1'],
-            fontSize=14, alignment=TA_CENTER, 
-            textColor=colors.HexColor('#667eea'),
-            spaceAfter=4
-        )
-        subtitle_style = ParagraphStyle(
-            'CustomSubtitle', parent=styles['Normal'],
-            fontSize=9, alignment=TA_CENTER, 
-            textColor=colors.grey,
-            spaceAfter=12
-        )
-        footer_style = ParagraphStyle(
-            'Footer', parent=styles['Normal'],
-            fontSize=8, alignment=TA_CENTER, 
-            textColor=colors.grey,
-            spaceTop=12
-        )
+        title_style = ParagraphStyle('T1', parent=styles['Heading1'], fontSize=14, alignment=TA_CENTER, textColor=colors.HexColor('#667eea'))
+        job_style = ParagraphStyle('T2', parent=styles['Heading2'], fontSize=12, alignment=TA_CENTER, textColor=colors.HexColor('#764ba2'))
+        sub_style = ParagraphStyle('T3', parent=styles['Normal'], fontSize=9, alignment=TA_CENTER, textColor=colors.grey)
 
-        story = []
-        
-        story.append(Paragraph("🚀 V27 Engine - Ratio Report", title_style))
-        if job_number:
-            story.append(Paragraph(f"🔢 Job Number: {job_number}", 
-                          ParagraphStyle('JobStyle', parent=styles['Heading2'],
-                                       fontSize=12, alignment=TA_CENTER,
-                                       textColor=colors.HexColor('#764ba2'),
-                                       spaceAfter=8)))
-        story.append(Paragraph(
-            f"Algorithm: {algo_name} | Waste: {waste_percent}% | "
-            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            subtitle_style
-        ))
-        story.append(Spacer(1, 10))
+        story = [
+            Paragraph("📊 Plate Ratio System - Layout Report", title_style),
+            Paragraph(f"🔢 Job Number: {job_number}", job_style),
+            Paragraph(f"Engine: {algo_name} | Total Waste: {waste_percent}% | Run Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", sub_style),
+            Spacer(1, 15)
+        ]
 
-        # Build header
-        header_row = ["SL", "Style", "Color", "Size", "Original", "With Add-on"]
-        for p in plates:
-            header_row.append(f"Plate {p['name']}")
-        header_row.extend(["Total Prod.", "Excess", "Excess %"])
+        # Table Header Configuration
+        header = ["SL", "Style", "Color", "Size", "Original", "Target"]
+        for p in plates: 
+            header.append(f"Plate {p['name']}")
+        header.extend(["Total Prod", "Excess", "Excess %"])
         
-        summary_data = [header_row]
-        
+        table_data = [header]
         sl = 1
         for tag in demand.keys():
-            style = styles_dict.get(tag, "N/A") if styles_dict else "N/A"
-            color = colors_dict.get(tag, "N/A") if colors_dict else "N/A"
-            size = sizes_dict.get(tag, "N/A") if sizes_dict else "N/A"
-            
-            row = [str(sl), style, color, size, 
-                   str(original_qty.get(tag, 0)), str(demand[tag])]
-            
-            total_produced = 0
+            row = [
+                str(sl), styles_dict.get(tag, "N/A"), colors_dict.get(tag, "N/A"), sizes_dict.get(tag, "N/A"),
+                str(original_qty.get(tag, 0)), str(demand[tag])
+            ]
             for p in plates:
-                ups = p["layout"].get(tag, 0)
-                row.append(str(ups))
-                total_produced += ups * p["sheets"]
-            
-            excess = total_produced - demand[tag]
-            excess_percent = f"{round((excess / demand[tag]) * 100, 2) if demand[tag] else 0}%"
-            row.extend([str(total_produced), str(excess), excess_percent])
-            summary_data.append(row)
+                row.append(str(p["layout"].get(tag, 0)))
+                
+            total_prod = sum(p["layout"].get(tag, 0) * p["sheets"] for p in plates)
+            excess = total_prod - demand[tag]
+            row.extend([str(total_prod), str(excess), f"{round((excess/demand[tag])*100,1) if demand[tag] else 0}%"])
+            table_data.append(row)
             sl += 1
-        
-        # Total row
-        total_row = ["📊", "TOTAL", "", "", 
-                     str(sum(original_qty.values())), str(sum(demand.values()))]
-        
-        total_produced_sum = 0
-        for p in plates:
-            plate_total = 0
-            for tag in demand:
-                plate_total += p["layout"].get(tag, 0) * p["sheets"]
-            total_row.append(str(plate_total))
-            total_produced_sum += plate_total
-        
-        total_excess_sum = total_produced_sum - sum(demand.values())
-        total_excess_percent = (
-            f"{round((total_excess_sum / total_produced_sum) * 100, 2) if total_produced_sum > 0 else 0}%"
-        )
-        total_row.extend([str(total_produced_sum), str(total_excess_sum), total_excess_percent])
-        summary_data.append(total_row)
-        
-        main_table = Table(summary_data, repeatRows=1)
-        
-        table_style = [
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 7),
-            ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
-            ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -2), 6),
-            ('ALIGN', (0, 1), (-1, -2), 'CENTER'),
-            ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#f0f0f0')),
-            ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, -1), (-1, -1), 7),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ]
-        
-        for i in range(1, len(summary_data) - 1):
-            if i % 2 == 0:
-                table_style.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#f8f9fa')))
-        
-        main_table.setStyle(TableStyle(table_style))
-        story.append(main_table)
-        story.append(Spacer(1, 15))
-        
-        # Plate Details
-        story.append(Paragraph("🧾 Plate Configuration Details", 
-                              ParagraphStyle('SubHeader', parent=styles['Heading2'],
-                                           fontSize=11, alignment=TA_CENTER,
-                                           textColor=colors.HexColor('#667eea'))))
-        story.append(Spacer(1, 8))
-        
-        plate_data = [["SL", "Plate ID", "Sheets", "Total UPS"]]
-        for idx, p in enumerate(plates, 1):
-            plate_data.append([
-                str(idx), 
-                p["name"], 
-                str(p["sheets"]), 
-                str(sum(p["layout"].values()))
-            ])
-        
-        plate_table = Table(plate_data)
-        plate_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#667eea')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 8),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 1), (-1, -1), 7),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            
+        # Compile ReportLab PDF
+        t = Table(table_data, repeatRows=1)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#667eea')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.white),
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+            ('FONTSIZE', (0,0), (-1,-1), 7),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
-        
-        story.append(plate_table)
-        story.append(Spacer(1, 15))
-        
-        story.append(Paragraph(
-            f"This Report Generated by Ovi's V27 Engine | Job: {job_number if job_number else 'N/A'} | All Rights Reserved",
-            footer_style
-        ))
-        
+        story.append(t)
         doc.build(story)
         buffer.seek(0)
         return buffer
-
-    except Exception as e:
-        print(f"PDF Generation Error: {str(e)}")
+    except Exception:
         return None
 
 
 # ================================================================
-# V27 ENGINE - COMPLETE IMPLEMENTATION
+# ADVANCED V27 ENGINE: EXPERT CANDIDATE SHEET SIMULATION
 # ================================================================
-
-class V27Engine:
+def algo_v27_candidate_sheet_optimization(demand_dict, plate_capacity=60, max_plates=3):
     """
-    V27 Engine - Smart Production Planning System
+    Simulates all matching candidate round sheets based on actual demand metrics.
+    Completely eliminates rigid scaling multipliers.
     """
+    TOTAL_UPS = plate_capacity
+    total_initial_demand = sum(demand_dict.values())
+    if total_initial_demand == 0: 
+        return None
     
-    def __init__(self, capacity: int, max_plates: int, max_sheets: int = 100):
-        self.capacity = capacity
-        self.max_plates = max_plates
-        self.max_sheets = max_sheets
-        self.learning_memory = {}
+    # ১. এস্টিমেটেড বেস শিট
+    estimated_base_sheets = total_initial_demand / TOTAL_UPS
     
-    # ================================================================
-    # 1. INPUT VALIDATOR
-    # ================================================================
-    class InputValidator:
-        @staticmethod
-        def validate(demand: dict, capacity: int, max_plates: int) -> Tuple[bool, str]:
-            if not demand:
-                return False, "Demand data is empty"
-            if not all(isinstance(v, (int, float)) and v >= 0 for v in demand.values()):
-                return False, "All quantities must be positive numbers"
-            if capacity <= 0:
-                return False, "Plate capacity must be greater than 0"
-            if max_plates <= 0:
-                return False, "Max plates must be greater than 0"
-            total_demand = sum(demand.values())
-            if total_demand == 0:
-                return False, "Total demand is zero"
-            return True, "Validation successful"
+    # ২. প্রোডাকশন ফ্রেন্ডলি ক্যান্ডিডেট শিটের তালিকা জেনারেট (২৫ বা ৫০ ব্যবধানে)
+    start_sheet = max(25, int(estimated_base_sheets * 0.4))
+    end_sheet = int(estimated_base_sheets * 1.7)
+    step = 50 if estimated_base_sheets > 500 else 25
     
-    # ================================================================
-    # 2. CANDIDATE SHEET GENERATOR
-    # ================================================================
-    class CandidateSheetGenerator:
-        def __init__(self, capacity: int, max_plates: int, max_sheets: int = 100):
-            self.capacity = capacity
-            self.max_plates = max_plates
-            self.max_sheets = max_sheets
-        
-        def generate_candidates(self, remaining_total: int) -> List[int]:
-            capacity_per_round = self.max_plates * self.capacity
-            if capacity_per_round == 0:
-                return [1]
-            
-            base_sheets = math.ceil(remaining_total / capacity_per_round)
-            candidates = []
-            
-            # First: base sheets
-            candidates.append(base_sheets)
-            
-            # Second: reduced sheets (like your 12)
-            if base_sheets > 3:
-                candidates.append(max(1, base_sheets // 5))
-            
-            # Third: minimal sheets (like your 2)
-            if base_sheets > 5:
-                candidates.append(max(1, base_sheets // 30))
-            
-            # Add variations
-            for i in range(max(1, base_sheets - 2), base_sheets + 3):
-                if i not in candidates and i <= self.max_sheets:
-                    candidates.append(i)
-            
-            return sorted(set(candidates))
-    
-    # ================================================================
-    # 3. PLATE BUILDER
-    # ================================================================
-    class PlateBuilder:
-        def __init__(self, capacity: int):
-            self.capacity = capacity
-        
-        def build_layout(self, remaining: dict) -> dict:
-            active = {k: v for k, v in remaining.items() if v > 0}
-            if not active:
-                return {}
-            
-            total_remaining = sum(active.values())
-            layout = {}
-            used_capacity = 0
-            
-            sorted_items = sorted(active.items(), key=lambda x: x[1], reverse=True)
-            
-            for tag, qty in sorted_items:
-                if used_capacity >= self.capacity:
-                    break
-                
-                ratio = qty / total_remaining if total_remaining > 0 else 0
-                ups = max(1, int(ratio * self.capacity))
-                ups = min(ups, self.capacity - used_capacity)
-                
-                if ups > 0:
-                    layout[tag] = ups
-                    used_capacity += ups
-            
-            while used_capacity < self.capacity and active:
-                best_tag = max(active, key=lambda t: remaining[t] / (layout.get(t, 1) + 1))
-                layout[best_tag] = layout.get(best_tag, 0) + 1
-                used_capacity += 1
-            
-            return layout
-    
-    # ================================================================
-    # 4. SINGLE ROUND SIMULATOR
-    # ================================================================
-    class SingleRoundSimulator:
-        def __init__(self, max_plates: int, capacity: int):
-            self.max_plates = max_plates
-            self.capacity = capacity
-            self.plate_builder = V27Engine.PlateBuilder(capacity)
-        
-        def simulate_round(self, remaining: dict, sheet_counts: List[int]) -> Tuple[List[dict], dict]:
-            all_plates = []
-            current_remaining = remaining.copy()
-            
-            for sheet_count in sheet_counts:
-                for plate_num in range(self.max_plates):
-                    if not any(v > 0 for v in current_remaining.values()):
-                        break
-                    
-                    layout = self.plate_builder.build_layout(current_remaining)
-                    if not layout:
-                        break
-                    
-                    for tag, ups in layout.items():
-                        current_remaining[tag] = max(0, current_remaining.get(tag, 0) - (ups * sheet_count))
-                    
-                    all_plates.append({
-                        "name": plate_name(len(all_plates) + 1),
-                        "layout": layout,
-                        "sheets": sheet_count
-                    })
-            
-            return all_plates, current_remaining
-    
-    # ================================================================
-    # 5. WASTE CALCULATOR
-    # ================================================================
-    @staticmethod
-    def calculate_waste(plates: list, demand: dict) -> float:
-        total_produced = 0
-        total_demand = sum(demand.values())
-        
-        if total_demand == 0:
-            return 0.0
-        
-        for plate in plates:
-            for tag, ups in plate["layout"].items():
-                total_produced += ups * plate.get("sheets", 0)
-        
-        if total_produced == 0:
-            return 100.0
-        
-        waste = total_produced - total_demand
-        waste_percent = (waste / total_produced) * 100
-        return max(0, round(waste_percent, 2))
-    
-    # ================================================================
-    # 6. SOLUTION SCORER
-    # ================================================================
-    class SolutionScorer:
-        def __init__(self, waste_weight: float = 0.5, plates_weight: float = 0.25, sheets_weight: float = 0.25):
-            self.waste_weight = waste_weight
-            self.plates_weight = plates_weight
-            self.sheets_weight = sheets_weight
-        
-        def score(self, plates: list, demand: dict) -> float:
-            waste = V27Engine.calculate_waste(plates, demand)
-            num_plates = len(plates)
-            total_sheets = sum(p.get("sheets", 0) for p in plates)
-            
-            waste_score = waste / 100
-            plates_score = num_plates / 100
-            sheets_score = total_sheets / 100
-            
-            return (self.waste_weight * waste_score +
-                    self.plates_weight * plates_score +
-                    self.sheets_weight * sheets_score)
-    
-    # ================================================================
-    # 7. SEARCH ENGINE
-    # ================================================================
-    class SearchEngine:
-        def __init__(self, max_plates: int, capacity: int, iterations: int = 50):
-            self.max_plates = max_plates
-            self.capacity = capacity
-            self.iterations = iterations
-        
-        def search(self, demand: dict) -> Tuple[list, dict]:
-            best_solution = None
-            best_score = float('inf')
-            best_details = {}
-            
-            strategies = [
-                self._greedy_strategy,
-                self._balanced_strategy,
-                self._proportional_strategy,
-                self._random_strategy,
-            ]
-            
-            for strategy in strategies:
-                for _ in range(max(1, self.iterations // len(strategies))):
-                    solution, details = strategy(demand)
-                    if solution:
-                        scorer = V27Engine.SolutionScorer()
-                        score = scorer.score(solution, demand)
-                        
-                        if score < best_score:
-                            best_score = score
-                            best_solution = solution
-                            best_details = details
-            
-            return best_solution, best_details
-        
-        def _greedy_strategy(self, demand: dict) -> Tuple[list, dict]:
-            return self._simulate_with_strategy(demand, "greedy")
-        
-        def _balanced_strategy(self, demand: dict) -> Tuple[list, dict]:
-            return self._simulate_with_strategy(demand, "balanced")
-        
-        def _proportional_strategy(self, demand: dict) -> Tuple[list, dict]:
-            return self._simulate_with_strategy(demand, "proportional")
-        
-        def _random_strategy(self, demand: dict) -> Tuple[list, dict]:
-            return self._simulate_with_strategy(demand, "random")
-        
-        def _simulate_with_strategy(self, demand: dict, strategy: str) -> Tuple[list, dict]:
-            remaining = demand.copy()
-            total_demand = sum(demand.values())
-            capacity_per_round = self.max_plates * self.capacity
-            
-            if capacity_per_round == 0:
-                return [], {}
-            
-            generator = V27Engine.CandidateSheetGenerator(self.capacity, self.max_plates)
-            sheet_counts = generator.generate_candidates(total_demand)
-            
-            simulator = V27Engine.SingleRoundSimulator(self.max_plates, self.capacity)
-            plates, final_remaining = simulator.simulate_round(remaining, sheet_counts)
-            
-            plates = ensure_demand_met(plates, demand)
-            return plates, {
-                "strategy": strategy, 
-                "sheet_counts": sheet_counts,
-                "final_balance": sum(final_remaining.values())
-            }
-    
-    # ================================================================
-    # 8. OUTPUT GENERATOR
-    # ================================================================
-    class OutputGenerator:
-        @staticmethod
-        def generate_summary(plates: list, demand: dict) -> dict:
-            waste = V27Engine.calculate_waste(plates, demand)
-            
-            return {
-                "plates": plates,
-                "waste_percent": waste,
-                "total_plates": len(plates),
-                "total_sheets": sum(p.get("sheets", 0) for p in plates),
-                "total_production": sum(
-                    ups * p.get("sheets", 0) 
-                    for p in plates 
-                    for ups in p["layout"].values()
-                ),
-                "total_demand": sum(demand.values()),
-            }
+    candidate_sheets = list(range(start_sheet, end_sheet, step))
+    if int(estimated_base_sheets) not in candidate_sheets:
+        candidate_sheets.append(int(estimated_base_sheets))
+    candidate_sheets = sorted([c for c in candidate_sheets if c > 0])
 
-
-# ================================================================
-# V27 ENGINE - YOUR IDEA IMPLEMENTATION
-# ================================================================
-
-def v27_optimizer(demand: dict, capacity: int, max_plates: int) -> list:
-    """
-    V27 Engine - Based on Your Idea
+    best_result = None
+    min_total_waste = float('inf')
     
-    Rules:
-    1. UPS (capacity) কখনো পরিবর্তন হবে না
-    2. Plate সংখ্যা User-এর Max Plates-এর বেশি হবে না
-    3. অনেক Candidate Sheet Test করবে
-    4. Manual Trial-এর বদলে Computer Search করবে
-    """
-    
-    total_qty = sum(demand.values())
-    capacity_per_round = max_plates * capacity
-    
-    # ================================================================
-    # STEP 1: Estimated Sheet বের করুন
-    # ================================================================
-    estimated_sheets = math.ceil(total_qty / capacity_per_round)
-    
-    # ================================================================
-    # STEP 2: অনেক Candidate Sheet তৈরি করুন
-    # ================================================================
-    candidate_sheets = []
-    
-    # Estimated Sheet এর আশেপাশে 20-30 টা Candidate তৈরি করুন
-    for i in range(-15, 16):  # -15 to +15
-        candidate = estimated_sheets + i
-        if candidate >= 1:  # Sheet 0 বা negative হতে পারে না
-            candidate_sheets.append(candidate)
-    
-    # Unique এবং Sorted করুন
-    candidate_sheets = sorted(set(candidate_sheets))
-    
-    # ================================================================
-    # STEP 3: প্রতিটি Candidate দিয়ে Simulation করুন
-    # ================================================================
-    best_solution = None
-    best_waste = float('inf')
-    best_details = {}
-    
-    for sheets in candidate_sheets:
-        # 3.1: এই Candidate দিয়ে Production Calculate করুন
-        remaining = demand.copy()
-        plates = []
-        plate_count = 0
+    # ৩. ক্যান্ডিডেট শিট ধরে কমপ্লিট ডাইনামিক প্লেট সিমুলেশন লুপ
+    for candidate in candidate_sheets:
+        current_demand = copy.deepcopy(demand_dict)
+        plates_list = []
+        run_count = 1
+        is_first_run = True
         
-        # 3.2: Max Plates পর্যন্ত প্লেট তৈরি করুন
-        while plate_count < max_plates and any(v > 0 for v in remaining.values()):
-            # Layout তৈরি করুন (UPS Fixed = capacity)
-            layout = create_layout(remaining, capacity)
-            
-            if not layout:
+        while sum(current_demand.values()) > 0 and run_count <= max_plates:
+            active_sizes = {k: v for k, v in current_demand.items() if v > 0}
+            if not active_sizes: 
                 break
             
-            # এই প্লেট Apply করুন
-            for tag, ups in layout.items():
-                remaining[tag] = max(0, remaining[tag] - (ups * sheets))
+            allocated_ups = {}
+            total_active_demand = sum(active_sizes.values())
             
-            plates.append({
-                "name": plate_name(plate_count + 1),
-                "layout": layout,
-                "sheets": sheets
+            # শেষ প্লেটের জন্য অবশিষ্ট সব ডিমান্ড কাভার করার স্ট্র্যাটেজি
+            if run_count == max_plates:
+                if len(active_sizes) <= TOTAL_UPS:
+                    for size in active_sizes: 
+                        allocated_ups[size] = 1
+                    remaining_ups = TOTAL_UPS - sum(allocated_ups.values())
+                    if remaining_ups > 0:
+                        for size, _ in sorted(active_sizes.items(), key=lambda x: x[1], reverse=True):
+                            if remaining_ups == 0: break
+                            allocated_ups[size] += 1
+                            remaining_ups -= 1
+                else:
+                    allocated_ups = {sz: int(floor((qty / total_active_demand) * TOTAL_UPS)) for sz, qty in active_sizes.items()}
+                    remaining_ups = TOTAL_UPS - sum(allocated_ups.values())
+                    for size, _ in sorted(active_sizes.items(), key=lambda x: (x[1]/total_active_demand * TOTAL_UPS) - floor((x[1]/total_active_demand) * TOTAL_UPS), reverse=True):
+                        if remaining_ups == 0: break
+                        allocated_ups[size] += 1
+                        remaining_ups -= 1
+            else:
+                # রেগুলার প্লেটের জন্য ডাইনামিক রেশিও ডিস্ট্রিবিউশন
+                raw_ups = {sz: (qty / total_active_demand) * TOTAL_UPS for sz, qty in active_sizes.items()}
+                allocated_ups = {sz: max(1, int(floor(val))) for sz, val in raw_ups.items()}
+                remaining_ups = TOTAL_UPS - sum(allocated_ups.values())
+                if remaining_ups > 0:
+                    for size, _ in sorted(raw_ups.items(), key=lambda x: x[1] - allocated_ups[x[0]], reverse=True):
+                        if remaining_ups == 0: break
+                        allocated_ups[size] += 1
+                        remaining_ups -= 1
+                while sum(allocated_ups.values()) > TOTAL_UPS:
+                    max_tag = max(allocated_ups, key=allocated_ups.get)
+                    allocated_ups[max_tag] -= 1
+
+            # প্রথম কম্বিনেশনে ক্যান্ডিডেট শিট অ্যাসাইন হবে
+            if is_first_run:
+                run_sheets = candidate
+                is_first_run = False
+                if run_count == max_plates:
+                    needed = [ceil(current_demand[sz] / max(1, allocated_ups.get(sz, 1))) for sz in active_sizes]
+                    if needed: 
+                        run_sheets = max(run_sheets, max(needed))
+            else:
+                if run_count == max_plates:
+                    needed = [ceil(current_demand[sz] / max(1, allocated_ups.get(sz, 1))) for sz in active_sizes]
+                    run_sheets = max(needed) if needed else 1
+                else:
+                    run_sheets = max(1, min(ceil(qty / allocated_ups.get(sz, 1)) for sz, qty in active_sizes.items()))
+            
+            plate_production = {sz: ups * run_sheets for sz, ups in allocated_ups.items()}
+            for sz, qty in plate_production.items():
+                current_demand[sz] = max(0, current_demand[sz] - qty)
+            
+            plates_list.append({
+                "plate_index": run_count, 
+                "name": plate_name(run_count),
+                "layout": allocated_ups, 
+                "sheets": run_sheets, 
+                "production": plate_production
             })
+            run_count += 1
             
-            plate_count += 1
+        # অপ্টিমাইজেশন ম্যাট্রিক্স স্কোরিং (মিনিমাম ওয়েস্টেজ ট্র্যাকিং)
+        total_produced = {sz: 0 for sz in demand_dict.keys()}
+        for p in plates_list:
+            for sz, qty in p["production"].items(): 
+                total_produced[sz] += qty
         
-        # 3.3: Final Waste Calculate করুন
-        final_waste = calculate_waste_percent(plates, demand)
+        scenario_waste = sum(max(0, total_produced[sz] - target) for sz, target in demand_dict.items())
         
-        # 3.4: Best Solution Update করুন
-        if final_waste < best_waste:
-            best_waste = final_waste
-            best_solution = plates
-            best_details = {
-                "sheets_used": sheets,
-                "candidate_index": candidate_sheets.index(sheets),
-                "total_candidates": len(candidate_sheets),
-                "total_plates": len(plates)
+        if scenario_waste < min_total_waste:
+            min_total_waste = scenario_waste
+            best_result = {
+                "plates": plates_list, 
+                "waste": scenario_waste, 
+                "candidate_sheet": candidate
             }
-    
-    # ================================================================
-    # STEP 4: Best Solution Return করুন
-    # ================================================================
-    return ensure_demand_met(best_solution, demand)
-
-
-def create_layout(remaining: dict, capacity: int) -> dict:
-    """
-    Plate Layout তৈরি করুন - UPS কখনো capacity এর বেশি হবে না
-    """
-    active = {k: v for k, v in remaining.items() if v > 0}
-    if not active:
-        return {}
-    
-    total_remaining = sum(active.values())
-    layout = {}
-    used_capacity = 0
-    
-    # ডিমান্ড অনুযায়ী সাজান (বড় থেকে ছোট)
-    sorted_items = sorted(active.items(), key=lambda x: x[1], reverse=True)
-    
-    for tag, qty in sorted_items:
-        if used_capacity >= capacity:
-            break
-        
-        # UPS ক্যালকুলেট করুন (capacity এর বেশি হবে না)
-        ratio = qty / total_remaining if total_remaining > 0 else 0
-        ups = max(1, int(ratio * capacity))
-        ups = min(ups, capacity - used_capacity)
-        
-        if ups > 0:
-            layout[tag] = ups
-            used_capacity += ups
-    
-    # বাকি ক্যাপাসিটি পূরণ করুন
-    while used_capacity < capacity and active:
-        best_tag = max(active, key=lambda t: remaining[t] / (layout.get(t, 1) + 1))
-        layout[best_tag] = layout.get(best_tag, 0) + 1
-        used_capacity += 1
-    
-    return layout
+            
+    return best_result
 
 
 # ================================================================
-# MAIN UI
+# CONTROL PANEL INTERFACE
 # ================================================================
-
-# ================================================================
-# CONFIGURATION
-# ================================================================
-st.markdown('<div class="card"><div class="card-title" style="text-align: center; display: block; width: 100%;">⚙️ Production Configuration</div>', unsafe_allow_html=True)
-
+st.markdown('<div class="card"><div class="card-title" style="text-align: center; display: block; width: 100%;">⚙️ Production Configuration Panel</div>', unsafe_allow_html=True)
 col1, col2, col3, col4, col5 = st.columns(5)
-with col1:
-    n = st.number_input("🏷️ Number of Items", 1, 500, 1)
-with col2:
-    cap = st.number_input("📀 Plate Capacity (UPS)", 1, 200, 10)
-with col3:
-    maxp = st.number_input("🎨 Max Plates per Round", 1, 100, 60)
-with col4:
-    addon = st.number_input("📈 Add-on (%)", 0.0, 50.0, 0.0, step=0.5)
-with col5:
-    iterations = st.number_input("🔄 Search Iterations", 10, 200, 50, step=10)
-
+with col1: n = st.number_input("🏷️ Number of Items", 1, 500, 3)
+with col2: cap = st.number_input("📀 Plate Capacity (UPS)", 1, 200, 60)
+with col3: maxp = st.number_input("🎨 Max Plates Allowed", 1, 50, 3)
+with col4: addon = st.number_input("📈 Add-on / Waste Margin (%)", 0.0, 50.0, 0.0, step=0.5)
+with col5: job_number = st.text_input("🔢 Production Job ID", value="JOB-001")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ================================================================
-# INPUT METHOD
-# ================================================================
-st.markdown('<div class="card"><div class="card-title" style="text-align: center; display: block; width: 100%;">📦 Input Method</div>', unsafe_allow_html=True)
-
-input_mode = st.radio(
-    "Select Input Mode:",
-    options=["✏️ Manual Input", "📂 Upload Excel File"],
-    horizontal=True,
-    index=0
-)
-
-st.markdown('</div>', unsafe_allow_html=True)
 
 # ================================================================
-# MANUAL INPUT
+# INPUT METHOD ROUTING
 # ================================================================
-if input_mode == "✏️ Manual Input":
-    st.markdown('<div class="card"><div class="card-title" style="text-align: center; display: block; width: 100%;">📦 Item Quantity Details (Manual)</div>', unsafe_allow_html=True)
-    
-    col1, col2, col3, col4, col5 = st.columns([0.5, 1.5, 1.5, 1.5, 2])
-    with col1:
-        st.markdown("**SL**")
-    with col2:
-        st.markdown("**Style**")
-    with col3:
-        st.markdown("**Color**")
-    with col4:
-        st.markdown("**Size**")
-    with col5:
-        st.markdown("**Quantity**")
-    
-    st.markdown("---")
-    
-    tags = []
-    styles = []
-    colors = []
-    sizes = []
-    qty = []
-    
+input_mode = st.radio("Choose Preferred Input Pipeline:", options=["✏️ Manual Input Matrix", "📂 Automated Excel Pipeline (.xlsx)"], horizontal=True)
+
+styles_dict, colors_dict, sizes_dict, original_qty, demand_dict = {}, {}, {}, {}, {}
+tags = []
+
+if "✏️ Manual Input Matrix" in input_mode:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
     for i in range(n):
-        col1, col2, col3, col4, col5 = st.columns([0.5, 1.5, 1.5, 1.5, 2])
+        c1, c2, c3, c4, c5 = st.columns([0.5, 1.5, 1.5, 1.5, 2])
+        c1.markdown(f"<p style='margin-top:2rem; font-weight:bold;'>#{i+1}</p>", unsafe_allow_html=True)
+        style_val = c2.text_input("Style Identification", value=f"Style_{i+1}", key=f"s_{i}")
+        color_val = c3.text_input("Color Specification", value="Black", key=f"c_{i}")
+        size_val = c4.text_input("Size Standard", value=chr(83 + i % 4), key=f"z_{i}")
+        qty_val = c5.number_input("Target Order Volume", min_value=0, value=1000 * (i+1), step=100, key=f"q_{i}")
         
-        with col1:
-            st.markdown(f"**{i+1}**")
-        with col2:
-            style_val = st.text_input("Style", value="N/A", key=f"style_{i}", label_visibility="collapsed", placeholder="N/A")
-        with col3:
-            color_val = st.text_input("Color", value="N/A", key=f"color_{i}", label_visibility="collapsed", placeholder="N/A")
-        with col4:
-            size_val = st.text_input("Size", value="N/A", key=f"size_{i}", label_visibility="collapsed", placeholder="N/A")
-        with col5:
-            qty_val = st.number_input("Quantity", min_value=0, value=0, step=100, key=f"qty_manual_{i}", label_visibility="collapsed")
-        
-        styles.append(style_val.strip() if style_val.strip() else "N/A")
-        colors.append(color_val.strip() if color_val.strip() else "N/A")
-        sizes.append(size_val.strip() if size_val.strip() else "N/A")
-        tags.append(f"Item {i+1}")
-        qty.append(qty_val)
+        tag = f"Item_{i+1}_{style_val}_{size_val}"
+        tags.append(tag)
+        styles_dict[tag], colors_dict[tag], sizes_dict[tag], original_qty[tag] = style_val, color_val, size_val, qty_val
+        demand_dict[tag] = int(qty_val * (1 + addon / 100))
+    st.markdown('</div>', unsafe_allow_html=True)
+else:
+    st.markdown('<div class="card"><div class="card-title">📂 Upload Industrial Production Matrix</div>', unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("Upload .xlsx Spreadsheet Matrix", type=["xlsx"])
+    if uploaded_file:
+        try:
+            # Skiprows fixed to skip exactly 29 lines of metadata and headers
+            df_xl = pd.read_excel(uploaded_file, skiprows=29)
+            st.success("Production Matrix Extracted Successfully!")
+            st.dataframe(df_xl.head(10), use_container_width=True)
+            
+            columns_list = list(df_xl.columns)
+            c_1, c_2, c_3, c_4 = st.columns(4)
+            style_col = c_1.selectbox("Map Style Target Column", columns_list, index=0 if "Style" not in columns_list else columns_list.index("Style"))
+            color_col = c_2.selectbox("Map Color Target Column", columns_list, index=min(1, len(columns_list)-1) if "Color" not in columns_list else columns_list.index("Color"))
+            size_col = c_3.selectbox("Map Size Target Column", columns_list, index=min(2, len(columns_list)-1) if "Size" not in columns_list else columns_list.index("Size"))
+            qty_col = c_4.selectbox("Map Volume Target Column", columns_list, index=min(3, len(columns_list)-1) if "Quantity" not in columns_list else columns_list.index("Quantity"))
+            
+            for index, row in df_xl.iterrows():
+                st_val = str(row.get(style_col, 'N/A')).strip()
+                cl_val = str(row.get(color_col, 'N/A')).strip()
+                sz_val = str(row.get(size_col, 'N/A')).strip()
+                q_val = int(row[qty_col]) if pd.notnull(row.get(qty_col)) else 0
+                
+                if q_val > 0:
+                    tag = f"Item_{index+1}_{st_val}_{sz_val}"
+                    tags.append(tag)
+                    styles_dict[tag], colors_dict[tag], sizes_dict[tag], original_qty[tag] = st_val, cl_val, sz_val, q_val
+                    demand_dict[tag] = int(q_val * (1 + addon / 100))
+        except Exception as e:
+            st.error(f"Spreadsheet Parsing Blocked: {str(e)}")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ================================================================
+# SYSTEM CORE PROCESSOR EXECUTION
+# ================================================================
+if tags and sum(original_qty.values()) > 0:
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    if st.button("🚀 Run V27 Candidate Sheet Simulation Solver", type="primary"):
+        with st.spinner("Processing Matrix Multi-Pass Scenarios..."):
+            res = algo_v27_candidate_sheet_optimization(demand_dict, cap, int(maxp))
+            if res:
+                final_plates = ensure_demand_met(res["plates"], demand_dict)
+                w_percent = calculate_waste_percent(final_plates, demand_dict)
+                
+                # Global Session caching
+                st.session_state['v27_plates'] = final_plates
+                st.session_state['v27_waste'] = w_percent
+                st.session_state['v27_cand'] = res["candidate_sheet"]
+                st.session_state['run_success'] = True
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+# ================================================================
+# ANALYTICS GRAPHICS AND DISPLAYS
+# ================================================================
+if st.session_state.get('run_success', False):
+    plates = st.session_state['v27_plates']
+    w_percent = st.session_state['v27_waste']
+    cand_sheet = st.session_state['v27_cand']
     
+    st.markdown(f'<div class="best-algo">🎖️ Best Candidate Print Sheet Selected: {cand_sheet} Sheets </div>', unsafe_allow_html=True)
+    
+    cm1, cm2, cm3 = st.columns(3)
+    cm1.markdown(f'<div class="metric-card"><div class="metric-value">{len(plates)}</div><div class="metric-label">Active Plates Formed</div></div>', unsafe_allow_html=True)
+    cm2.markdown(f'<div class="metric-card"><div class="metric-value">{w_percent}%</div><div class="metric-label">Calculated Material Over-production (Waste)</div></div>', unsafe_allow_html=True)
+    cm3.markdown(f'<div class="metric-card"><div class="metric-value">{sum(p["sheets"] for p in plates)}</div><div class="metric-label">Combined Print Sheet Count</div></div>', unsafe_allow_html=True)
+    
+    st.write("##")
+    
+    # Summary Sheet Output
+    st.markdown('<div class="card"><div class="card-title">📊 Final Optimized Production Matrix</div>', unsafe_allow_html=True)
+    df_summary = build_full_summary(plates, demand_dict, original_qty)
+    if not df_summary.empty:
+        df_summary['Tag'] = df_summary['Tag'].apply(lambda x: styles_dict.get(x, x) if x != "TOTAL" else "TOTAL")
+    st.dataframe(df_summary, use_container_width=True)
     st.markdown('</div>', unsafe_allow_html=True)
     
-    if any(q > 0 for q in qty):
-        preview_df = pd.DataFrame({
-            "SL": range(1, n + 1),
-            "Style": styles,
-            "Color": colors,
-            "Size": sizes,
-            "Quantity": qty
-        })
-        st.info("📋 Data Preview")
-        st.dataframe(preview_df, use_container_width=True, height=200)
+    # Detailed Expander Matrices
+    st.markdown('<div class="card"><div class="card-title">🛠️ Micro Layout Formats per Plate</div>', unsafe_allow_html=True)
+    for p in plates:
+        with st.expander(f"⚙️ Plate {p['name']} Layout Structure — ({p['sheets']} Sheets)", expanded=True):
+            p_cols = st.columns(2)
+            with p_cols[0]:
+                st.write("**Plate Ratio Allocation (UPS):**")
+                st.json({sizes_dict.get(k, k): v for k, v in p["layout"].items() if v > 0})
+            with p_cols[1]:
+                st.write("**Net Physical Production Outputs:**")
+                st.json({sizes_dict.get(k, k): v for k, v in p["production"].items() if v > 0})
+    st.markdown('</div>', unsafe_allow_html=True)
     
-    original_qty = {f"Item {i+1}": int(q) for i, q in enumerate(qty) if q > 0}
-    demand = {f"Item {i+1}": ceil(int(q) * (1 + addon / 100)) for i, q in enumerate(qty) if q > 0}
-    
-    st.session_state['item_styles'] = {f"Item {i+1}": styles[i] for i in range(n)}
-    st.session_state['item_colors'] = {f"Item {i+1}": colors[i] for i in range(n)}
-    st.session_state['item_sizes'] = {f"Item {i+1}": sizes[i] for i in range(n)}
+    # Documentation Export Pipeline
+    if REPORTLAB_AVAILABLE:
+        st.markdown('<div class="card"><div class="card-title">📄 Industrial Documentation Pipeline</div>', unsafe_allow_html=True)
+        pdf_buffer = generate_pdf_report(plates, demand_dict, original_qty, "V27 Candidate Sheet Driver", w_percent, styles_dict, colors_dict, sizes_dict, job_number)
+        if pdf_buffer:
+            st.download_button("📥 Download Ratio Breakdown PDF Report", pdf_buffer, f"{job_number}_V27_Analysis.pdf", mime="application/pdf", use_container_width=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
 
 # ================================================================
-# EXCEL UPLOAD
-# ================================================================
-else:
-    st.markdown('<div class="card"><div class="card-title" style="text-align: center; display: block; width: 100%;">📂 Upload Excel File</div>', unsafe_allow_html=True)
-    
-    uploaded_file = st.file_uploader(
-        "Upload Excel file with Item Details",
-        type=["xlsx", "xls"],
-        help="File must have columns: SL, Style, Color, Size, Quantity"
-    )
-    
-    if uploaded_file is not None:
-        try:
-            df = pd.read_excel(uploaded_file)
-            df = df.dropna(how='all')
-            
-            style_col = None
-            color_col = None
-            size_col = None
-            qty_col = None
-            
-            for col in df.columns:
-                col_lower = str(col).lower().strip()
-                if col_lower in ['style', 'styles']:
-                    style_col = col
-                elif col_lower in ['color', 'colors', 'colour']:
-                    color_col = col
-                elif col_lower in ['size', 'sizes']:
-                    size_col = col
-                elif col_lower in ['quantity', 'qty', 'qty.', 'quantities', 'total']:
-                    qty_col = col
-            
-            if qty_col is None and len(df.columns) >= 2:
-                for col in df.columns:
-                    if df[col].dtype in ['int64', 'float64']:
-                        qty_col = col
-                        break
-            
-            if qty_col is None and len(df.columns) >= 2:
-                qty_col = df.columns[-1]
-            
-            if style_col is None:
-                style_col = df.columns[1] if len(df.columns) >= 2 else None
-            if color_col is None:
-                color_col = df.columns[2] if len(df.columns) >= 3 else None
-            if size_col is None:
-                size_col = df.columns[3] if len(df.columns) >= 4 else None
-            
-            if qty_col is None:
-                st.error("❌ Could not find 'Quantity' column.")
-                st.stop()
-            
-            style_data = df[style_col].astype(str).tolist() if style_col else ["N/A"] * len(df)
-            color_data = df[color_col].astype(str).tolist() if color_col else ["N/A"] * len(df)
-            size_data = df[size_col].astype(str).tolist() if size_col else ["N/A"] * len(df)
-            qty_data = df[qty_col].tolist()
-            
-            cleaned_data = []
-            for idx, (style, color, size, qty) in enumerate(zip(style_data, color_data, size_data, qty_data)):
-                if pd.isna(qty):
-                    continue
-                try:
-                    qty_int = int(float(qty))
-                    if qty_int > 0:
-                        style_val = str(style).strip() if not pd.isna(style) and str(style).strip() != '' else "N/A"
-                        color_val = str(color).strip() if not pd.isna(color) and str(color).strip() != '' else "N/A"
-                        size_val = str(size).strip() if not pd.isna(size) and str(size).strip() != '' else "N/A"
-                        cleaned_data.append((style_val, color_val, size_val, qty_int))
-                except (ValueError, TypeError):
-                    continue
-            
-            if not cleaned_data:
-                st.error("❌ No valid data found.")
-                st.stop()
-            
-            style_list = [item[0] for item in cleaned_data]
-            color_list = [item[1] for item in cleaned_data]
-            size_list = [item[2] for item in cleaned_data]
-            qty_list = [item[3] for item in cleaned_data]
-            
-            preview_df = pd.DataFrame({
-                "Style": style_list,
-                "Color": color_list,
-                "Size": size_list,
-                "Quantity": qty_list
-            })
-            
-            st.success(f"✅ {len(cleaned_data)} items loaded successfully!")
-            st.dataframe(preview_df, use_container_width=True)
-            
-            n = len(cleaned_data)
-            tags = [f"Item {i+1}" for i in range(n)]
-            qty = qty_list
-            
-            st.session_state['item_styles'] = {f"Item {i+1}": style_list[i] for i in range(n)}
-            st.session_state['item_colors'] = {f"Item {i+1}": color_list[i] for i in range(n)}
-            st.session_state['item_sizes'] = {f"Item {i+1}": size_list[i] for i in range(n)}
-            
-            original_qty = {t: int(q) for t, q in zip(tags, qty) if q > 0}
-            demand = {t: ceil(int(q) * (1 + addon / 100)) for t, q in zip(tags, qty) if q > 0}
-            
-        except Exception as e:
-            st.error(f"❌ Error reading file: {str(e)}")
-            st.stop()
-    else:
-        st.info("📤 Please upload an Excel file to continue.")
-        st.stop()
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-# ================================================================
-# GENERATE BUTTON
-# ================================================================
-col1, col2, col3 = st.columns([1, 2, 1])
-with col2:
-    generate_clicked = st.button("🚀 Generate with V27 Engine", use_container_width=True, type="primary")
-
-# ================================================================
-# RESULTS
-# ================================================================
-if generate_clicked:
-    if not demand:
-        st.error("⚠️ Please enter at least one item with quantity greater than 0")
-        st.stop()
-    
-    with st.spinner("🔍 V27 Engine searching for optimal solution..."):
-        
-        # ✅ এখন v27_optimizer ডিফাইন করা আছে
-        plates = v27_optimizer(demand, cap, maxp, iterations)
-        
-        if not plates:
-            st.error("❌ V27 Engine could not find a solution. Please check your inputs.")
-            st.stop()
-        
-        # Calculate metrics
-        waste_percent = calculate_waste_percent(plates, demand)
-        total_plates = len(plates)
-        total_sheets = sum(p.get("sheets", 0) for p in plates)
-        total_production = sum(
-            ups * p.get("sheets", 0) 
-            for p in plates 
-            for ups in p["layout"].values()
-        )
-        total_demand = sum(demand.values())
-        
-        # ====================== RESULTS UI ======================
-        st.markdown(f"""
-        <div class="result-card">
-            <div style="font-size: 1.2rem; font-weight: 600; margin-bottom: 0.5rem;">✅ Solution Found!</div>
-            <div class="big-number">Waste: {waste_percent}%</div>
-            <div style="margin-top: 0.5rem;">
-                <span class="label">📊 {total_plates} Plates</span>
-                <span style="margin: 0 1rem;">|</span>
-                <span class="label">📄 {total_sheets} Sheets</span>
-                <span style="margin: 0 1rem;">|</span>
-                <span class="label">📦 {total_production} Produced</span>
-                <span style="margin: 0 1rem;">|</span>
-                <span class="label">🎯 {total_demand} Demand</span>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        # ============= SUMMARY TABLE =============
-        st.markdown("### 📊 Production Summary")
-        full_df = build_full_summary(plates, demand, original_qty)
-        if not full_df.empty:
-            st.dataframe(full_df, use_container_width=True, height=400)
-        
-        # ============= PLATE DETAILS =============
-        st.markdown("### 🧾 Plate Configuration Details")
-        plate_rows = []
-        for idx, p in enumerate(plates, 1):
-            plate_rows.append({
-                "SL": idx,
-                "Plate ID": p.get("name", f"Plate {idx}"),
-                "Sheets Required": p.get("sheets", 0),
-                "Total UPS": sum(p["layout"].values()),
-                "Layout": str(p["layout"])
-            })
-        
-        plate_df = pd.DataFrame(plate_rows)
-        st.dataframe(plate_df, use_container_width=True)
-        
-        # ============= METRICS =============
-        st.markdown("### 📈 Performance Metrics")
-        col1, col2, col3, col4 = st.columns(4)
-        with col1:
-            st.markdown(f"""
-            <div class="metric-item">
-                <div class="value">{waste_percent}%</div>
-                <div class="label">Waste</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col2:
-            st.markdown(f"""
-            <div class="metric-item">
-                <div class="value">{total_plates}</div>
-                <div class="label">Total Plates</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col3:
-            st.markdown(f"""
-            <div class="metric-item">
-                <div class="value">{total_sheets}</div>
-                <div class="label">Total Sheets</div>
-            </div>
-            """, unsafe_allow_html=True)
-        with col4:
-            efficiency = 100 - waste_percent
-            st.markdown(f"""
-            <div class="metric-item">
-                <div class="value">{efficiency:.1f}%</div>
-                <div class="label">Efficiency</div>
-            </div>
-            """, unsafe_allow_html=True)
-        
-        # ============= DOWNLOAD BUTTONS =============
-        st.markdown("### 📥 Download Report")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            bio_excel = BytesIO()
-            with pd.ExcelWriter(bio_excel, engine="openpyxl") as writer:
-                full_df.to_excel(writer, sheet_name="Summary", index=False)
-                plate_df.to_excel(writer, sheet_name="Plate Details", index=False)
-            bio_excel.seek(0)
-            
-            st.download_button(
-                "📊 Download Excel",
-                bio_excel,
-                f"V27_Engine_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
-                use_container_width=True
-            )
-        
-        with col2:
-            if REPORTLAB_AVAILABLE:
-                try:
-                    styles_dict = st.session_state.get('item_styles', {})
-                    colors_dict = st.session_state.get('item_colors', {})
-                    sizes_dict = st.session_state.get('item_sizes', {})
-                    
-                    pdf_buffer = generate_pdf_report(
-                        plates,
-                        demand,
-                        original_qty,
-                        "V27 Engine",
-                        waste_percent,
-                        styles_dict,
-                        colors_dict,
-                        sizes_dict,
-                        f"V27_{datetime.now().strftime('%Y%m%d')}"
-                    )
-                    
-                    if pdf_buffer:
-                        st.download_button(
-                            "📄 Download PDF",
-                            pdf_buffer,
-                            f"V27_Engine_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.pdf",
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                except Exception as e:
-                    st.warning(f"PDF not available: {str(e)}")
-            else:
-                st.info("ℹ️ PDF requires reportlab. Install: pip install reportlab")
-
-# ================================================================
-# FOOTER
+# SYSTEM FOOTER
 # ================================================================
 st.markdown("""
 <div style="text-align: center; padding: 2rem; margin-top: 3rem; border-top: 2px solid rgba(102,126,234,0.3); background: rgba(255,255,255,0.02); border-radius: 20px;">
-    <p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin: 0;">
-        © 2025 V27 Engine | Smart Production Planning System
-    </p>
-    <p style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 0.85rem; font-weight: 600; margin: 10px 0 0 0;">
-        ✨ Developed by Ovi | All Rights Reserved ✨
-    </p>
+    <p style="color: rgba(255,255,255,0.6); font-size: 0.85rem; margin: 0;">© 2026 Plate Ratio System | Version 27 (Candidate Sheet Edition)</p>
+    <p style="color: rgba(255,255,255,0.4); font-size: 0.8rem; margin: 5px 0;">Optimized Framework Engine • Injected with Sheet Driver Automations • Production Ready</p>
 </div>
 """, unsafe_allow_html=True)
